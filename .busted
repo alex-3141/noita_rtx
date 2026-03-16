@@ -1,0 +1,15 @@
+return {
+  _all = {
+    ROOT = {"./"},
+    lpath = "./?.lua;./?/init.lua",
+    output = "utfTerminal",
+    pattern = "_spec",
+    lua = "luajit"
+  },
+  default = {
+    recursive = true,
+  },
+  verbose = {
+    verbose = true
+  }
+}
