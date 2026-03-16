@@ -376,9 +376,9 @@ uvec3 sample_glow_source_st(ivec2 st){
 		return uvec3(0);
 	}
 
-	// Tame superbright particles
+	// Kill superbright particles
 	if(max(max(color_u.r, color_u.g), color_u.b) >= 63) {
-		color_u /= 4;
+		return uvec3(0);
 	}
 
 	if(color_u.rgb == uvec3(127)){
