@@ -247,19 +247,39 @@ const uint MATERIAL_EMITTER_SOLID = 15;
 uint getMaterialType(vec4 color){
 	uvec4 color_u = uvec4(color * 255.0);
 
+	// Opaque
+	if((color_u.r & 0x80) != 0){
+		return 0u;
+	}
+
 	// Colors that will crush to zero
 	if(max(max(color_u.r, color_u.g), color_u.b) < 4u){
 		return 3u;
 	}
 
-	// Remove fire smoke
-	if(color_u.rgb == uvec3(6)) {
+	// Alpha values between 0.0 and 1.0 are either fire particles or superbright particles
+	// ALpha values of 1.0 are liquids
+
+	// Kill superbright particles
+	// TODO: Idenfity best max threshold for these
+	if(color.a > 0.0 && color.a < 1.0 && max(max(color_u.r, color_u.g), color_u.b) > 60u) {
 		return 3u;
 	}
 
-	// Superbright particles
-	if(color.a > 0.0 && color.a < 1.0){
-		return 2u;
+	// Remove dark fire particles
+
+	// The "base" fire colors. There may be more.
+	if(color_u.rgb == uvec3(7, 3, 3) || color_u.rgb == uvec3(7, 3, 1)){
+		return 3u;
+	}
+	// Fire particles
+	if(color.a > 0.0 && color.a < 1.0) {
+		// Only keep colors above a certain brightness threshold
+		if(luminance(color.rgb) < 0.05) {
+			return 3u;
+		} else {
+			return 2u;
+		}
 	}
 
 	// Air / Gas
@@ -276,9 +296,6 @@ uint getMaterialType(vec4 color){
 	if (color.a > 0.9){
 		return 1u;
 	}
-
-	// Opaque
-	return 0u;
 }
 
 uint getMaterial(ivec2 st) {
@@ -358,33 +375,13 @@ vec3 sampleVbufferUV(VBuffer vbuffer, vec2 uv) {
 
 uvec3 sample_glow_source_st(ivec2 st){
 	vec4 s = texelFetch(tex_glow_source, st, 0);
+
+	// Disregard non-emissive particles. This also filters out undesired colors
+	if(getMaterialType(s) != 2u) {
+		return uvec3(0u);
+	}
+
 	uvec4 color_u = uvec4(s * 255.0);
-
-	// Non-glow materials
-	if((color_u.r & 0x80) != 0){
-		return uvec3(0);
-	}
-
-	// Colors that will crush to zero
-	// TODO: Review this
-	// if(max(max(color_u.r, color_u.g), color_u.b) < 4u){
-	// 	return uvec3(0);
-	// }
-
-	// Remove fire smoke
-	if(color_u.rgb == uvec3(6)) {
-		return uvec3(0);
-	}
-
-	// Kill superbright particles
-	if(max(max(color_u.r, color_u.g), color_u.b) >= 63) {
-		return uvec3(0);
-	}
-
-	if(color_u.rgb == uvec3(127)){
-		return uvec3(0);
-	}
-
 
     // Strip non-color bits
     color_u = color_u & 0x7F;
