@@ -1030,10 +1030,73 @@ vec3 getPointLightSources(){
 	return accumulated_light;
 }
 
+uint sampleMaterial(ivec2 st){
+	if (st.y < 120) {
+		uint data = uint(texelFetch(tex_glow, st + ivec2(0, 120), 0).b * 255.0);
+		return (data >> 6) & 0x3u;
+	} else {
+		uint data = uint(texelFetch(tex_glow, st, 0).b * 255.0);
+		return (data >> 4) & 0x3u;
+	}
+}
 
-vec3 rtx_compute(){
-	vec4 fg_srgb = texture(tex_fg, tex_coord_);
-	vec4 bg_srgb = texture(tex_bg, tex_coord_);
+vec3 sample_buffer_texel(VBuffer vbuffer, ivec2 st) {
+	st += ivec2(vbuffer.pos);
+	return texelFetch(tex_glow, st, 0).rgb;
+}
+
+vec3 sample_emitter_color_texel(ivec2 st){
+    ivec2 color_st = st;
+
+    bool top = color_st.y >= int(GLOW_SIZE.y / 2.0 - 1.0);
+
+    if(top){
+        color_st.y -= int(GLOW_SIZE.y / 2);
+    }
+
+    color_st /= 2;
+
+	uvec3 smp = uvec3(sample_buffer_texel(VBUF_COLOR_1, color_st) * 255.0) & 0xFF;
+
+    uvec3 color_u = uvec3(0);
+
+    if(top){
+        color_u = uvec3(
+            smp.g,
+            smp.b >> 4,
+            smp.b
+        );
+    } else {
+        color_u = uvec3(
+            smp.r >> 4,
+            smp.r,
+            smp.g >> 4
+        );
+    }
+
+    color_u = color_u & 0xF;
+
+    vec3 color = vec3(color_u << 4) / 255.0;
+
+	// if (color == vec3(0.0)) {
+	// 	return vec3(vec2(st) / VBUF_SIZE,  0.0);
+	// }
+
+    return color;
+}
+
+vec3 sample_emitter_color(vec2 uv) {
+    ivec2 emitter_st = ivec2(uv * GLOW_BOUNDS);
+	vec3 smp = sample_emitter_color_texel(emitter_st);
+	return smp;
+}
+
+
+vec3 rtx_compute(in vec2 tex_coord, in vec2 tex_coord_glow){
+	vec2 tex_coord_inverted = vec2(tex_coord.x, 1.0 - tex_coord.y);
+	vec4 fg_srgb = texture(tex_fg, tex_coord_inverted);
+	vec4 bg_srgb = texture(tex_bg, tex_coord_inverted);
+
 	// Don't allow too dark pixels
 	fg_srgb.rgb = max(vec3(0.01), fg_srgb.rgb);
 	vec3 fg_linear = srgb2rgb(fg_srgb.rgb);
@@ -1042,7 +1105,7 @@ vec3 rtx_compute(){
 	vec3 summed_light = vec3(0.0);
 
 	vec3 point_light = getPointLightSources();
-	vec2 coord_glow_compensated = tex_coord_glow_ + camera_compensation() / GLOW_BOUNDS;
+	vec2 coord_glow_compensated = tex_coord_glow + camera_compensation() / GLOW_BOUNDS;
 	// vec3 hdr_glow_unfiltered = sample_hdr_buffer(HDR_VBUF_0, coord_glow_compensated);
 	// vec3 hdr_glow_unfiltered = sample_hdr_buffer_gaussian_5x5(HDR_VBUF_0, coord_glow_compensated);
 	vec3 hdr_glow_unfiltered = sample_hdr_buffer_gaussian_3x3(HDR_VBUF_0, coord_glow_compensated);
@@ -1088,7 +1151,7 @@ vec3 rtx_compute(){
 
 	// ================ Buffer visualisations ================
 
-	// Glow buffer
+	// // Glow buffer
 	// color = texelFetch(tex_glow, ivec2((tex_coord) * GLOW_SIZE), 0).rgb;
 
 	// Source glow buffer
@@ -1104,7 +1167,8 @@ vec3 rtx_compute(){
 	// color = rgb2srgb(glow_light);
 
 	// Point light
-	// color = glow_light * 0.02;
+	// color = point_light;
+	// color = rgb2srgb(point_light);
 
 	// Summed light
 	// color = summed_light;
@@ -1124,17 +1188,17 @@ vec3 rtx_compute(){
 	// ================ Emissive pixel visualisation ================
 	// Emissive areas will be larger than the materials due to being expanded in glow2
 
-	// bool emitter_here = sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS)) == 2u;
+	// bool emitter_here = sampleMaterial(ivec2(tex_coord_glow * GLOW_BOUNDS)) == 2u;
 	// bool emitter_side = (
-	// 	sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS) + ivec2( 1,  1)) == 2u ||
-	// 	sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS) + ivec2(-1,  1)) == 2u ||
-	// 	sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS) + ivec2( 1, -1)) == 2u ||
-	// 	sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS) + ivec2(-1, -1)) == 2u
+	// 	sampleMaterial(ivec2(tex_coord_glow * GLOW_BOUNDS) + ivec2( 1,  1)) == 2u ||
+	// 	sampleMaterial(ivec2(tex_coord_glow * GLOW_BOUNDS) + ivec2(-1,  1)) == 2u ||
+	// 	sampleMaterial(ivec2(tex_coord_glow * GLOW_BOUNDS) + ivec2( 1, -1)) == 2u ||
+	// 	sampleMaterial(ivec2(tex_coord_glow * GLOW_BOUNDS) + ivec2(-1, -1)) == 2u
 	// );
 	// if(!emitter_here && emitter_side) {
 	// 	color = vec3(0.0, 1.0, 1.0);
 	// } else if(emitter_here) {
-	// 	color = sample_emitter_color(tex_coord_glow_);
+	// 	color = sample_emitter_color(tex_coord_glow);
 	// }
 
 
@@ -1227,66 +1291,6 @@ vec3 render(vec2 uv) {
 
 // -----------------------------------------------------------------------------------------------
 
-vec3 sample_buffer_texel(VBuffer vbuffer, ivec2 st) {
-	st += ivec2(vbuffer.pos);
-	return texelFetch(tex_glow, st, 0).rgb;
-}
-
-vec3 sample_emitter_color_texel(ivec2 st){
-    ivec2 color_st = st;
-
-    bool top = color_st.y >= int(GLOW_SIZE.y / 2.0 - 1.0);
-
-    if(top){
-        color_st.y -= int(GLOW_SIZE.y / 2);
-    }
-
-    color_st /= 2;
-
-	uvec3 smp = uvec3(sample_buffer_texel(VBUF_COLOR_1, color_st) * 255.0) & 0xFF;
-
-    uvec3 color_u = uvec3(0);
-
-    if(top){
-        color_u = uvec3(
-            smp.g,
-            smp.b >> 4,
-            smp.b
-        );
-    } else {
-        color_u = uvec3(
-            smp.r >> 4,
-            smp.r,
-            smp.g >> 4
-        );
-    }
-
-    color_u = color_u & 0xF;
-
-    vec3 color = vec3(color_u << 4) / 255.0;
-
-	// if (color == vec3(0.0)) {
-	// 	return vec3(vec2(st) / VBUF_SIZE,  0.0);
-	// }
-
-    return color;
-}
-
-uint sampleMaterial(ivec2 st){
-	if (st.y < 120) {
-		uint data = uint(texelFetch(tex_glow, st + ivec2(0, 120), 0).b * 255.0);
-		return (data >> 6) & 0x3u;
-	} else {
-		uint data = uint(texelFetch(tex_glow, st, 0).b * 255.0);
-		return (data >> 4) & 0x3u;
-	}
-}
-
-vec3 sample_emitter_color(vec2 uv) {
-    ivec2 emitter_st = ivec2(uv * GLOW_BOUNDS);
-	vec3 smp = sample_emitter_color_texel(emitter_st);
-	return smp;
-}
 
 uvec3 sample_glow_source_st(ivec2 st){
 	uvec3 color_u = uvec3(texelFetch(tex_glow_unfiltered, st, 0).rgb * 255.0);
@@ -1769,6 +1773,5 @@ void main()
 
 	// Apply Noita RTX lighting
 	// TODO: This clobbers the rest of the shader output. Need better integration.
-	outColor.rgb = rtx_compute();
-
+	outColor.rgb = rtx_compute(tex_coord, tex_coord_glow);
 }
