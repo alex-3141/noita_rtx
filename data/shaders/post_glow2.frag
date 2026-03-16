@@ -262,7 +262,7 @@ uint getMaterialType(vec4 color){
 
 	// Kill superbright particles
 	// TODO: Idenfity best max threshold for these
-	if(color.a > 0.0 && color.a < 1.0 && max(max(color_u.r, color_u.g), color_u.b) > 60u) {
+	if(color.a > 0.0 && color.a < 1.0 && max(max(color_u.r, color_u.g), color_u.b) > 31u) {
 		return 3u;
 	}
 
