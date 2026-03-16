@@ -247,6 +247,11 @@ const uint MATERIAL_EMITTER_SOLID = 15;
 uint getMaterialType(vec4 color){
 	uvec4 color_u = uvec4(color * 255.0);
 
+	// Liquid
+	if (color.a == 1.0){
+		return 1u;
+	}
+
 	// Opaque
 	if((color_u.r & 0x80) != 0){
 		return 0u;
@@ -296,6 +301,9 @@ uint getMaterialType(vec4 color){
 	if (color.a > 0.9){
 		return 1u;
 	}
+
+	// No material identified, default to air
+	return 3u;
 }
 
 uint getMaterial(ivec2 st) {
@@ -372,6 +380,8 @@ vec3 sampleVbufferUV(VBuffer vbuffer, vec2 uv) {
 
 
 // ============================================================================
+
+// outColor.rgb = texelFetch(tex_glow_source_particles, ivec2(uv * textureSize(tex_glow_source_particles, 0)), 0).rgb;
 
 uvec3 sample_glow_source_st(ivec2 st){
 	vec4 s = texelFetch(tex_glow_source, st, 0);
