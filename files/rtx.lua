@@ -76,13 +76,8 @@ local get_light_sources = function()
     return lights, lights_pos_luminosity
 end
 
-local pushDVDtexture = function()
-    GameSetPostFxTextureParameter("RL_tex_dvd", "mods/radiant_lighting_indev/files/dvd.png", 1, 2, false)
-end
-
 local init = function()
     texture.createTextures()
-    pushDVDtexture()
     materials.patch()
 end
 

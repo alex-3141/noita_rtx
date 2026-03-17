@@ -589,7 +589,6 @@ out vec4 outColor;
 // COMMON
 
 uniform sampler2D RL_tex_lights;
-uniform sampler2D RL_tex_dvd;
 uniform sampler2D RL_tex_light_list;
 uniform sampler2D RL_tex_df;
 uniform vec4 RL_light_count;
