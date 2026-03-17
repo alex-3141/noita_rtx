@@ -671,7 +671,6 @@ vec2 camera_compensation() {
 
 vec3 sample_hdr_buffer_texel(VBuffer vbuffer, ivec2 iv) {
 	// Don't sample outside buffer
-	// TODO: May not be needed
 	iv = clamp(iv, ivec2(vbuffer.pos), ivec2(vbuffer.pos + vbuffer.size * ivec2(2, 1)));
 
 	vec3 high_sample = texelFetch(tex_glow, iv + ivec2(0, 0), 0).rgb;
