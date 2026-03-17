@@ -247,8 +247,8 @@ const uint MATERIAL_EMITTER_SOLID = 15;
 uint getMaterialType(vec4 color){
 	uvec4 color_u = uvec4(color * 255.0);
 
-	// Liquid
-	if (color.a == 1.0){
+	// Liquid. non-emissive
+	if ((color_u.r & 0x80) != 0 && color.a == 1.0){
 		return 1u;
 	}
 
@@ -295,11 +295,6 @@ uint getMaterialType(vec4 color){
 	// Emissive
 	if((color_u.r & 128u) == 0u){
 		return 2u;
-	}
-
-	// Liquid
-	if (color.a > 0.9){
-		return 1u;
 	}
 
 	// No material identified, default to air
