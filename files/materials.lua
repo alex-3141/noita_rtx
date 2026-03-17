@@ -163,6 +163,19 @@ local function logPatchedMaterial(cell)
     -- print("Patched material " .. (cell.attr.name or "unnamed") .. " with color " .. (cell.attr.gfx_glow_color or "none"))
 end
 
+-- TODO: Place these in a user editable file
+local MATERIAL_OVERRIDES = {
+    ["glowstone"] = {
+        ["color"] = { r = 3, g = 12, b = 15 }
+    },
+    ["glowstone_altar"] = {
+        ["color"] = { r = 3, g = 12, b = 15 }
+    },
+    ["glowstone_potion"] = {
+        ["color"] = { r = 6, g = 15, b = 10 }
+    },
+}
+
 local function processMaterial(cell, material)
     local has_glow = cell.attr.gfx_glow or "0" ~= "0"
     local has_glow_color = cell.attr.gfx_glow_color ~= nil
@@ -170,6 +183,14 @@ local function processMaterial(cell, material)
     local has_wang_color = cell.attr.wang_color ~= nil
     local has_texture = false
     local is_gas = cell.attr.cell_type == "gas"
+
+    -- Apply overrides if available
+    if cell.attr.name and MATERIAL_OVERRIDES[cell.attr.name] then
+        local override = MATERIAL_OVERRIDES[cell.attr.name]
+        cell.attr.gfx_glow_color = colorToHex(override.color)
+        cell.attr.gfx_glow = "1023"
+        return
+    end
 
     if has_glow and is_gas then
         -- Engine randomises gas glow colors, we can't use it
