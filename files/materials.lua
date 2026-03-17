@@ -174,6 +174,9 @@ local MATERIAL_OVERRIDES = {
     ["glowstone_potion"] = {
         ["color"] = { r = 6, g = 15, b = 10 }
     },
+    ["rock_static_radioactive"] = {
+        ["color"] = { r = 4, g = 15, b = 0 }
+    }
 }
 
 local function processMaterial(cell, material)
