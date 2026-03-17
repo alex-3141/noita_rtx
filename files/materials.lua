@@ -24,6 +24,9 @@ local ADJUSTMENTS = {
     ["glowstone_altar"] = {
         ["gfx_glow"] = "127"
     },
+    ["glowstone_potion"] = {
+        ["gfx_glow"] = "127"
+    },
 }
 
 -- Some glowing materials cannot be modified with gfx_glow, such as gold and fire.
