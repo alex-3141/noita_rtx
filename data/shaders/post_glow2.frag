@@ -391,8 +391,8 @@ uvec3 sample_glow_source_st(ivec2 st){
     // Strip non-color bits
     color_u = color_u & 0x7F;
 
-	// Crush to 4 bits
-	color_u = min(color_u >> 1, 0xF);
+	// Crush from 6 bits to 4 bits
+	color_u = (color_u / 4) & 0xF;
 
     return color_u.rgb;
 }

@@ -12,307 +12,85 @@ local function colorToHex(color)
     return string.format("FF%02X%02X%02X", color.b, color.g, color.r)
 end
 
-local function cleanHexString(hex)
-    -- hex string sometimes has 0x prefix, remove it
-    if hex:sub(1, 2) == "0x" then
-        hex = hex:sub(3)
-    end
-    if #hex ~= 8 then
-        error("Hex color must be 8 characters long: " .. hex)
-    end
-    if not hex:match("^[0-9A-Fa-f]+$") then
-        error("Hex color must contain only hexadecimal characters: " .. hex)
-    end
-    return hex
-end
-
-local function wangColorToValues(cell)
-    local hex = cell.attr.wang_color
-    hex = cleanHexString(hex)
-    local a = tonumber(hex:sub(1, 2), 16)
-    -- These are in reverse order compared to gfx_glow_color
-    local b = tonumber(hex:sub(3, 4), 16)
-    local g = tonumber(hex:sub(5, 6), 16)
-    local r = tonumber(hex:sub(7, 8), 16)
-
-    return {r = r, g = g, b = b}
-end
-
-local function glowColorToValues(cell)
-    local hex = cell.attr.gfx_glow_color
-    hex = cleanHexString(hex)
-    local a = tonumber(hex:sub(1, 2), 16)
-    local r = tonumber(hex:sub(2, 3), 16)
-    local g = tonumber(hex:sub(4, 5), 16)
-    local b = tonumber(hex:sub(6, 7), 16)
-
-    return {r = r, g = g, b = b}
-end
-
-local function cellColorToValues(cell)
-    local outColor
-    if cell.attr.gfx_glow_color then
-        outColor = glowColorToValues(cell)
-    elseif cell.attr.wang_color then
-        outColor = wangColorToValues(cell)
-    else
-        return nil
-    end
-
-    -- materials.xml stores glow colors in a reduced brightness range, so we saturate it to the full range
-    -- local brightnessAdjust = (tonumber(cell.attr.gfx_glow) / 255) * 4
-
-    return outColor
-end
-
-
-
--- Marking gas is not possible due to color randomisation
-local MaterialType = {
-    ROCK_SOIL = 0,
-    BRICK = 1,
-    SAND = 2,
-    LIQUID = 3,
-    METAL = 4,
-    GLASS_ICE_CRYSTAL = 5,
-
-    EMITTER_LIQUID = 14,
-    EMITTER_SOLID = 15
-}
-
-local function isLiquid(cell)
-    return cell.attr.cell_type == "liquid" and
-        (cell.attr.liquid_sand or "0" == "0") and
-        (cell.attr.liquid_static or "0" == "0") and
-        (cell.attr.is_just_particle_fx or "0" == "0")
-end
-
-local function isMetal(cell)
-    if string.match(cell.attr.audio_physics_material_wall or "", "metal") ~= nil or
-       string.match(cell.attr.audio_physics_material_solid or "", "metal") ~= nil or
-       string.match(cell.attr.audio_physics_material_event or "", "metal") ~= nil then
-        return true
-    end
-    return false
-end
-
-local function isGlassOrIceOrCrystal(cell)
-    if string.match(cell.attr.audio_physics_material_wall or "", "ice") ~= nil or
-       string.match(cell.attr.audio_physics_material_wall or "", "glass") ~= nil or
-       string.match(cell.attr.audio_physics_material_solid or "", "ice") ~= nil or
-       string.match(cell.attr.audio_physics_material_solid or "", "glass") ~= nil then
-        return true
-    end
-    return false
-end
-
-local function isSand(cell)
-    if cell.attr.tags then
-        for tag in cell.attr.tags:gmatch("%[(.-)%]") do
-            if tag == "sand_ground" or tag == "sand_metal" or tag == "sand_other" then
-                return true
-            end
-        end
-    end
-    return false
-end
-
-local function isRock(cell)
-    if cell.attr.tags then
-        for tag in cell.attr.tags:gmatch("%[(.-)%]") do
-            if tag == "earth" then
-                return true
-            end
-        end
-    end
-    return false
-end
-
-local function determineMaterialType(cell)
-    if not cell then return MaterialType.GLASS_ICE_CRYSTAL end
-
-    if isMetal(cell) then
-        -- print((cell.attr.name or '???') .. '\tMetal')
-        return MaterialType.METAL
-    end
-    if isGlassOrIceOrCrystal(cell) then
-        -- print((cell.attr.name or '???') .. '\tGlass/Ice/Crystal')
-        return MaterialType.GLASS_ICE_CRYSTAL
-    end
-    if isSand(cell) then
-        -- print((cell.attr.name or '???') .. '\tSand')
-        return MaterialType.SAND
-    end
-    if isLiquid(cell) then
-        -- print((cell.attr.name or '???') .. '\tLiquid')
-        return MaterialType.LIQUID
-    end
-    if isRock(cell) then
-        -- print((cell.attr.name or '???') .. '\tRock/Soil')
-        return MaterialType.ROCK_SOIL
-    end
-
-    return nil
-end
-
-
 local function logPatchedMaterial(cell)
-    if not cell.attr.rtx_patched then
-        return
-    end
-    -- print("Patched material " .. (cell.attr.name or "unnamed") .. " with color " .. (cell.attr.gfx_glow_color or "none"))
+    print("Patched material " .. (cell.attr.name or "unnamed"))
 end
 
 -- TODO: Place these in a user editable file
-local MATERIAL_OVERRIDES = {
+local ADJUSTMENTS = {
     ["glowstone"] = {
-        ["color"] = { r = 3, g = 12, b = 15 }
+        ["gfx_glow"] = "127"
     },
     ["glowstone_altar"] = {
-        ["color"] = { r = 3, g = 12, b = 15 }
+        ["gfx_glow"] = "127"
     },
-    ["glowstone_potion"] = {
-        ["color"] = { r = 6, g = 15, b = 10 }
-    },
-    ["rock_static_radioactive"] = {
-        ["color"] = { r = 4, g = 15, b = 0 }
-    }
 }
 
-local function processMaterial(cell, material)
-    local has_glow = cell.attr.gfx_glow or "0" ~= "0"
-    local has_glow_color = cell.attr.gfx_glow_color ~= nil
-    local has_tags = cell.attr.tags ~= nil
-    local has_wang_color = cell.attr.wang_color ~= nil
-    local has_texture = false
+-- Some glowing materials cannot be modified with gfx_glow, such as gold and fire.
+-- The colors of these are always be in the range 0-63, or 6 bits.
+-- We normalize all other glow sources to 6 bits to match, so that everything is within the same range
+-- The color written to the glow texture is first multiplied by gfx_glow / 1023.
+-- Some materials that use textures or are gasses cannot have their colors changed exactly.
+-- Therefore, we set gfx_glow to 255 to push textures and gasses into the 0-63 range, and manually set the other materials
+-- For occluders, we set bit 7 to true to mark it as a non-color occluder. This leaves us with an extra bit for later.
+-- These colors are then crushed to 4 bits in the shader before being used for lighting
+-- Note: Liquids, fire and superbright particles will have special alpha values in the texture that we can't modify.
+
+local function processMaterial(cell)
+    local name = cell.attr.name
+
+    -- Apply adjustments if available
+    if name and ADJUSTMENTS[name] then
+        local adjustments = ADJUSTMENTS[name]
+        if adjustments.gfx_glow_color then
+            cell.attr.gfx_glow_color = adjustments.gfx_glow_color
+        end
+        if adjustments.gfx_glow then
+            cell.attr.gfx_glow = adjustments.gfx_glow
+        end
+    end
+
+    local has_glow = (cell.attr.gfx_glow or "0") ~= "0"
     local is_gas = cell.attr.cell_type == "gas"
 
-    -- Apply overrides if available
-    if cell.attr.name and MATERIAL_OVERRIDES[cell.attr.name] then
-        local override = MATERIAL_OVERRIDES[cell.attr.name]
-        cell.attr.gfx_glow_color = colorToHex(override.color)
-        cell.attr.gfx_glow = "1023"
-        return
+    if has_glow then
+        -- Clamp brightnesses to 255 and thus the 0-63 range. A few materials go above 255 and will be reduced.
+        -- There is a free bit available, if the material color can be modified then some kind of
+        -- tonemapping may be possible to preserve these highly bright materials
+        cell.attr.gfx_glow = string.format("%d", math.min(255, tonumber(cell.attr.gfx_glow)))
     end
 
-    if has_glow and is_gas then
-        -- Engine randomises gas glow colors, we can't use it
-        return
-    end
-
-    for child in cell:each_of("Graphics") do
-        if not child.attr then
-            break
-        end
-        -- If the parent or child has glow
-        if has_glow or (child.attr.gfx_glow or "0" ~= "0") then
-            -- And it has a valid texture file
-            if child.attr.texture_file ~= nil and child.attr.texture_file ~= "" and ModImageDoesExist(child.attr.texture_file) then
-                -- Skip processing and allow texture to be used as glow color
-            return
+    if is_gas then
+        -- Can't modify gasses
+    elseif has_glow then
+        -- Textured materials need gfx_glow_color to be zeroed, otherwise they will use the glow color of the parent material
+        for child in cell:each_of("Graphics") do
+            if child.attr.texture_file == ""  or child.attr.texture_file ~= nil then
+                cell.attr.gfx_glow_color = "00000000"
             end
         end
-        -- if has_glow and child.attr.normal_mapped or "0" ~= "0" then
-        --     child.attr.normal_mapped = "0"
-        -- end
-    end
-
-    -- if isOccluder(cell) then
-    --     outColor = { r = 255, g = 255, b = 255 }
-    --     cell.attr.gfx_glow = "255"
-    --     cell.attr.gfx_glow_color = colorToHex(outColor)
-    --     cell.attr.rtx_patched = "1"
-    --     return
-    -- end
-
-    local outColor = { r = 0, g = 0, b = 0 }
-    local dataBits = { r = 0, g = 0, b = 0 }
-
-    -- if (has_glow and has_texture) then
-    --     -- We can't control the color of the texture, but we can restrict the max brightness to only use the
-    --     -- low 4 bits of each channel, wich we can then use to differentiate texture glow from color glow
-    --     -- Unfortunately, this means we can't attach material properties to these materials
-    --     cell.attr.gfx_glow = math.min(63, tonumber(cell.attr.gfx_glow) or 0)
-    --     cell.attr.rtx_patched = "1"
-    --     return
-    -- end
-
-    if has_glow then
-        outColor = cellColorToValues(cell)
-
-        if not outColor then
-            warn("Material " .. (cell.attr.name or "unknown") .. " has invalid glow color. Skipping.")
-            return
-        end
-
-        -- Crush down to 4 bits per channel. This is all the room we can spare in our buffer and is good enough
-        outColor = {
-            r = math.min(15, outColor.r / 16),
-            g = math.min(15, outColor.g / 16),
-            b = math.min(15, outColor.b / 16)
-        }
-
-        -- Emitter (Solid)
-        if material == MaterialType.BRICK or
-           material == MaterialType.ROCK_SOIL or
-           material == MaterialType.SAND or
-           material == MaterialType.METAL or
-           material == MaterialType.GLASS_ICE_CRYSTAL then
-            material = MaterialType.EMITTER_SOLID
-        end
-
-        -- Emitter (Liquid)
-        if material == MaterialType.LIQUID then
-            material = MaterialType.EMITTER_LIQUID
-        end
-
-        cell.attr.gfx_glow = "1023"
     else
-        -- Not a glowing material
-        if is_gas then
-            -- Engine randomises gas glow colors, we can't use it
-            cell.attr.gfx_glow = "0"
-            cell.attr.gfx_glow_color = "00000000"
-            return
-        else
-            -- Set a glow color to encode material type
-            outColor.r = outColor.r + 128
-            outColor.g = outColor.g + 128
-            outColor.b = outColor.b + 128
-        end
+        -- Occluder - Set opaque bit
+        -- Note: We could include the full color or other information in the lower 6 bits.
+        --       This may be useful for something in the future.
+        cell.attr.gfx_glow_color = colorToHex( { r = 128, g = 128, b = 128 })
+        cell.attr.gfx_glow = "1023"
     end
-
-    -- Exact value rendered to glow texture
-    print("Patched material " .. (cell.attr.name or "unnamed") .. " with color " .. colorToHex(outColor))
-    cell.attr.gfx_glow_color = colorToHex(outColor)
-    cell.attr.gfx_glow = "1023"
 end
 
 local function patch()
     local materialsXMLString = ModTextFileGetContent("data/materials.xml")
     local materialsXML = nxml.parse(materialsXMLString)
 
-    local baseMaterials = {}
-
-    -- First pass for base materials
+    -- Base materials
     for cellData in materialsXML:each_of("CellData") do
-        local name = cellData.attr.name
-        local material = determineMaterialType(cellData) or MaterialType.ROCK_SOIL
-
-        if name and not baseMaterials[name] then
-            baseMaterials[name] = material
-        end
-
-        processMaterial(cellData, material)
+        processMaterial(cellData)
         logPatchedMaterial(cellData)
     end
 
+    -- Child materials
     for cellDataChild in materialsXML:each_of("CellDataChild") do
-        local parentName = cellDataChild.attr._parent
-
-        local material = determineMaterialType(cellDataChild) or baseMaterials[parentName] or MaterialType.ROCK_SOIL
-
-        processMaterial(cellDataChild, material)
+        processMaterial(cellDataChild)
         logPatchedMaterial(cellDataChild)
     end
 
