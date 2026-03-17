@@ -76,7 +76,7 @@ local function processMaterial(cell)
         -- Occluder - Set opaque bit
         -- Note: We could include the full color or other information in the lower 6 bits.
         --       This may be useful for something in the future.
-        cell.attr.gfx_glow_color = colorToHex( { r = 128, g = 128, b = 128 })
+        cell.attr.gfx_glow_color = colorToHex( { r = 64, g = 64, b = 64 })
         cell.attr.gfx_glow = "1023"
     end
 end

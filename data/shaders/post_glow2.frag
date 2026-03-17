@@ -248,12 +248,12 @@ uint getMaterialType(vec4 color){
 	uvec4 color_u = uvec4(color * 255.0);
 
 	// Liquid. non-emissive
-	if ((color_u.r & 0x80) != 0 && color.a == 1.0){
+	if ((color_u.r & 64u) != 0u && color.a == 1.0){
 		return 1u;
 	}
 
 	// Opaque
-	if((color_u.r & 0x80) != 0){
+	if((color_u.r & 64u) != 0u){
 		return 0u;
 	}
 
@@ -293,7 +293,7 @@ uint getMaterialType(vec4 color){
 	};
 
 	// Emissive
-	if((color_u.r & 128u) == 0u){
+	if((color_u.r & 64u) == 0u){
 		return 2u;
 	}
 
