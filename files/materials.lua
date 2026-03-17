@@ -151,8 +151,8 @@ local function determineMaterialType(cell)
         -- print((cell.attr.name or '???') .. '\tRock/Soil')
         return MaterialType.ROCK_SOIL
     end
-    -- print((cell.attr.name or '???') .. '\tRock/Soil')
-    return MaterialType.ROCK_SOIL
+
+    return nil
 end
 
 
@@ -177,9 +177,16 @@ local function processMaterial(cell, material)
     end
 
     for child in cell:each_of("Graphics") do
-        if not child.attr then break end
-        if has_glow and child.attr.texture_file ~= nil then
+        if not child.attr then
+            break
+        end
+        -- If the parent or child has glow
+        if has_glow or (child.attr.gfx_glow or "0" ~= "0") then
+            -- And it has a valid texture file
+            if child.attr.texture_file ~= nil and child.attr.texture_file ~= "" and ModImageDoesExist(child.attr.texture_file) then
+                -- Skip processing and allow texture to be used as glow color
             return
+            end
         end
         -- if has_glow and child.attr.normal_mapped or "0" ~= "0" then
         --     child.attr.normal_mapped = "0"
@@ -257,40 +264,31 @@ local function processMaterial(cell, material)
     cell.attr.gfx_glow = "1023"
 end
 
-local function processBaseMaterial(cell)
-    local material = determineMaterialType(cell)
-    processMaterial(cell, material)
-end
-
-local function processChildMaterial(cell, baseCell)
-    if not baseCell then
-        print("Base material not found for child material " .. (cell.attr.name or "unnamed"))
-        return
-    end
-    -- print("Processing child material " .. (cell.attr.name or "unnamed") .. " with base material " .. (baseCell.attr.name or "unnamed"))
-    local material = determineMaterialType(baseCell)
-    processMaterial(cell, material)
-end
-
 local function patch()
     local materialsXMLString = ModTextFileGetContent("data/materials.xml")
     local materialsXML = nxml.parse(materialsXMLString)
 
     local baseMaterials = {}
 
+    -- First pass for base materials
     for cellData in materialsXML:each_of("CellData") do
         local name = cellData.attr.name
+        local material = determineMaterialType(cellData) or MaterialType.ROCK_SOIL
+
         if name and not baseMaterials[name] then
-            baseMaterials[name] = cellData
+            baseMaterials[name] = material
         end
-        processBaseMaterial(cellData)
+
+        processMaterial(cellData, material)
         logPatchedMaterial(cellData)
     end
 
     for cellDataChild in materialsXML:each_of("CellDataChild") do
         local parentName = cellDataChild.attr._parent
 
-        processChildMaterial(cellDataChild, baseMaterials[parentName])
+        local material = determineMaterialType(cellDataChild) or baseMaterials[parentName] or MaterialType.ROCK_SOIL
+
+        processMaterial(cellDataChild, material)
         logPatchedMaterial(cellDataChild)
     end
 
