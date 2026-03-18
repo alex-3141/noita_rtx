@@ -1116,11 +1116,11 @@ vec3 rtx_compute(in vec2 tex_coord, in vec2 tex_coord_glow){
 
 	vec3 dust_light = vec3(dust_amount);
 
-	const vec3 ambient = vec3(0.1);
+	const vec3 ambient = vec3(0.08);
 
 	// Light multipliers
-	const float point_mul = 3.0;
-	const float glow_mul = 0.2;
+	const float point_mul = 2.5;
+	const float glow_mul = 0.6;
 
 	point_light *= point_mul;
 	glow_light *= glow_mul;
@@ -1132,7 +1132,7 @@ vec3 rtx_compute(in vec2 tex_coord, in vec2 tex_coord_glow){
 	summed_light += dust_light;
 
 	// Final brightness multiplier
-	summed_light *= 1.0;
+	summed_light *= 1.5;
 
 	// Multiply with scene and composite
 	vec3 fg_multiplied = fg_linear * summed_light;
