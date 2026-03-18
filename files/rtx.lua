@@ -76,9 +76,17 @@ local get_light_sources = function()
     return lights, lights_pos_luminosity
 end
 
+local push_uniforms = function()
+  local exposure = ModSettingGetNextValue("noita_rtx.exposure")
+  local ambient = ModSettingGetNextValue("noita_rtx.ambient")
+  local dust = ModSettingGetNextValue("noita_rtx.dust")
+  GameSetPostFxParameter("RTX_exposure_ambient_dust", exposure, ambient, dust, 0.0)
+end
+
 local init = function()
     texture.createTextures()
     materials.patch()
+    push_uniforms()
 end
 
 local previous_camera_pos_0 = { x = 0, y = 0 }

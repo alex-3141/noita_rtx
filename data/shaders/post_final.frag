@@ -594,6 +594,7 @@ uniform sampler2D RL_tex_df;
 uniform vec4 RL_light_count;
 uniform vec4 RL_time;
 uniform vec4 RL_data;
+uniform vec4 RTX_exposure_ambient_dust;
 
 ivec2 glow_iv = ivec2(tex_coord_glow_ * textureSize(tex_glow, 0));
 
@@ -1112,15 +1113,15 @@ vec3 rtx_compute(in vec2 tex_coord, in vec2 tex_coord_glow){
 	vec3 glow_light = hdr_glow_unfiltered;
 	// vec3 hdr_glow = hdr_glow_uninterpolated;
 
-	const float dust_amount = 0.0;
+	float exposure = RTX_exposure_ambient_dust.x;
+	float ambient = RTX_exposure_ambient_dust.y;
+	float dust = RTX_exposure_ambient_dust.z;
 
-	vec3 dust_light = vec3(dust_amount);
+	vec3 dust_light = vec3(0.0);
 
-	const vec3 ambient = vec3(0.08);
-
-	// Light multipliers
-	const float point_mul = 2.5;
-	const float glow_mul = 0.6;
+	// Light multipliers. These should balance all light sources to a common standard candle at 1.0 exposure
+	const float point_mul = 3.75;
+	const float glow_mul = 0.75;
 
 	point_light *= point_mul;
 	glow_light *= glow_mul;
@@ -1129,18 +1130,16 @@ vec3 rtx_compute(in vec2 tex_coord, in vec2 tex_coord_glow){
 	summed_light += ambient;
 	summed_light += point_light;
 	summed_light += glow_light;
-	summed_light += dust_light;
-
-	// Final brightness multiplier
-	summed_light *= 1.5;
 
 	// Multiply with scene and composite
 	vec3 fg_multiplied = fg_linear * summed_light;
 	vec3 bg_multiplied = bg_linear; // Probably doesn't need anyting done to it?
 	vec3 composited = mix(bg_multiplied, fg_multiplied, fg_srgb.a);
 
+	// Add dust (additive light)
+	composited += summed_light * dust;
+
 	// Final exposure adjustment and tonemapping
-	float exposure = 1.0;
 	vec3 composited_tonemapped = tonemap(composited * exposure);
 
     // Output as sRGB
