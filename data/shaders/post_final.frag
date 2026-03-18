@@ -1204,6 +1204,26 @@ vec3 rtx_compute(in vec2 tex_coord, in vec2 tex_coord_glow){
 	// color = mix(color, num_lights.rgb, num_lights.a);
 
 
+	// ================ Material visualisation ================
+
+	// uint mat = sampleMaterial(ivec2(tex_coord_glow * GLOW_BOUNDS));
+	// if(mat == 0u) {
+	// 	color = vec3(0.7, 0.0, 0.0);
+	// }
+	// if(mat == 1u) {
+	// 	color = vec3(0.0, 0.7, 0.0);
+	// }
+	// if(mat == 2u) {
+	// 	color = vec3(0.0, 0.0, 0.7);
+	// }
+	// if(mat == 3u) {
+	// 	color = vec3(0.7, 0.0, 0.7);
+	// }
+
+
+	// ============= Emitter color visualisation ==============
+	// color = sample_emitter_color(tex_coord_glow);
+
 	return color;
 }
 
