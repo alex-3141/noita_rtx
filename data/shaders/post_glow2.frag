@@ -261,15 +261,18 @@ uint getMaterialType(vec4 color){
 		return 0u;
 	}
 
-	// Kill superbright particles
-	if(max(max(color_u.r, color_u.g), color_u.b) >= 63u) {
+	// ==== Firefly filtering ====
+
+	// Kill superbright gas particles. These particles render closer to white than other particles
+	if(color.a > 0.0 && color.a < 1.0 && dot(color.rgb, vec3(1.0)) > 0.4){
 		return 3u;
 	}
 
-	// Firefly from fire particels that is always grayscale
-	if(color.a != 0.0 && color.a != 1.0 && color.r == color.g && color.g == color.b) {
+	// Kill materials very close to white
+	if(color.a == 0.0 && dot(normalize(color.rgb), normalize(vec3(1.0))) > 0.99){
 		return 3u;
 	}
+
 
 	// Colors that will crush to zero
 	if(max(max(color_u.r, color_u.g), color_u.b) < 4u){
