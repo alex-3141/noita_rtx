@@ -266,6 +266,11 @@ uint getMaterialType(vec4 color){
 		return 3u;
 	}
 
+	// Firefly from fire particels that is always grayscale
+	if(color.a != 0.0 && color.a != 1.0 && color.r == color.g && color.g == color.b) {
+		return 3u;
+	}
+
 	// Colors that will crush to zero
 	if(max(max(color_u.r, color_u.g), color_u.b) < 4u){
 		return 3u;
