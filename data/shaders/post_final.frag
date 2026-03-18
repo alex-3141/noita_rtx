@@ -1,4 +1,4 @@
-#version 450 core
+#version 400
 #define DITHER
 #define HIQ
 

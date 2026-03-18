@@ -1,4 +1,4 @@
-#version 450 core
+#version 400
 #extension GL_ARB_gpu_shader5 : enable
 
 // TOTAL BUFFER SIZE: 431x242
@@ -339,7 +339,7 @@ float downsampleEmitters(ivec2 st){
 }
 
 uint mostCommonMaterial4x4(ivec2 st){
-	uint materialCounts[16] = uint[16](0);
+	uint materialCounts[16] = uint[16](0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 	for(int y = 0; y < 4; y++){
 		for(int x = 0; x < 4; x++){
 			ivec2 sample_st = st + ivec2(y, x);

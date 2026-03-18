@@ -1,4 +1,4 @@
-#version 450 core
+#version 400
 
 #define BUFFER tex_glow_prev_frame
 
