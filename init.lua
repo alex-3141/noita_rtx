@@ -48,6 +48,8 @@ end
 function OnPlayerSpawned(player_entity)
     Player = player_entity
 
+    rtx.push_uniforms()
+
     -- Remove player light
     LightComponents = EntityGetComponent(player_entity, "LightComponent")
     if LightComponents and #LightComponents > 0 then

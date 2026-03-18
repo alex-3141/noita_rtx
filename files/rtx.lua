@@ -77,16 +77,15 @@ local get_light_sources = function()
 end
 
 local push_uniforms = function()
-  local exposure = ModSettingGetNextValue("noita_rtx.exposure")
-  local ambient = ModSettingGetNextValue("noita_rtx.ambient")
-  local dust = ModSettingGetNextValue("noita_rtx.dust")
+  local exposure = ModSettingGet("noita_rtx.exposure")
+  local ambient = ModSettingGet("noita_rtx.ambient")
+  local dust = ModSettingGet("noita_rtx.dust")
   GameSetPostFxParameter("RTX_exposure_ambient_dust", exposure, ambient, dust, 0.0)
 end
 
 local init = function()
     texture.createTextures()
     materials.patch()
-    push_uniforms()
 end
 
 local previous_camera_pos_0 = { x = 0, y = 0 }
@@ -117,5 +116,6 @@ end
 
 return {
     init = init,
-    update = update
+    update = update,
+    push_uniforms = push_uniforms
 }
