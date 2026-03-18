@@ -247,6 +247,10 @@ const uint MATERIAL_EMITTER_SOLID = 15;
 uint getMaterialType(vec4 color){
 	uvec4 color_u = uvec4(color * 255.0);
 
+	// Alpha values between 0.0 and 1.0 are fire particles
+	// TODO: The exact alpha value may be from the RENDER_FIRE_GLOW_ALPHA magic number
+	// Alpha values of 1.0 are liquids
+
 	// Liquid. non-emissive
 	if ((color_u.r & 64u) != 0u && color.a == 1.0){
 		return 1u;
@@ -257,17 +261,13 @@ uint getMaterialType(vec4 color){
 		return 0u;
 	}
 
-	// Colors that will crush to zero
-	if(max(max(color_u.r, color_u.g), color_u.b) < 4u){
+	// Kill superbright particles
+	if(max(max(color_u.r, color_u.g), color_u.b) >= 63u) {
 		return 3u;
 	}
 
-	// Alpha values between 0.0 and 1.0 are either fire particles or superbright particles
-	// ALpha values of 1.0 are liquids
-
-	// Kill superbright particles
-	// TODO: Idenfity best max threshold for these
-	if(color.a > 0.0 && color.a < 1.0 && max(max(color_u.r, color_u.g), color_u.b) > 31u) {
+	// Colors that will crush to zero
+	if(max(max(color_u.r, color_u.g), color_u.b) < 4u){
 		return 3u;
 	}
 
