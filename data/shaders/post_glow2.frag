@@ -273,6 +273,12 @@ uint getMaterialType(vec4 color){
 		return 3u;
 	}
 
+	// This appears to be a unique alpha value for embers, which renders extremely red.
+	// TODO: Use this to set a stable ember color instead of killing particle
+	if(color.a == 63.0/255.0){
+		return 3u;
+	}
+
 
 	// Colors that will crush to zero
 	if(max(max(color_u.r, color_u.g), color_u.b) < 4u){
