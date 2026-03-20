@@ -268,7 +268,9 @@ uint getMaterialType(vec4 color){
 		return 3u;
 	}
 
-	// Kill materials very close to white
+	// Kill materials very close to white.
+	// There are white pixels like this in gold and some particles
+	// TODO: This removes the white from material conversion effects.
 	if(color.a == 0.0 && dot(normalize(color.rgb), normalize(vec3(1.0))) > 0.99){
 		return 3u;
 	}
@@ -315,6 +317,38 @@ uint getMaterialType(vec4 color){
 	return 3u;
 }
 
+bool expand_emissive_pixels_r2(in ivec2 st){
+	const int radius = 2;
+	const int xLimits[3] = int[3](2, 2, 1);
+
+	for(int y = -radius; y <= radius; y++){
+		int xLimit = xLimits[abs(y)];
+		for(int x = -xLimit; x <= xLimit; x++){
+			if(getMaterialType(texelFetch(tex_glow_source, st + ivec2(x, y), 0)) == 2u){
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+bool expand_emissive_pixels_r4(in ivec2 st){
+	const int radius = 4;
+	const int xLimits[5] = int[5](4, 3, 3, 2, 0);
+
+	for(int y = -radius; y <= radius; y++){
+		int xLimit = xLimits[abs(y)];
+		for(int x = -xLimit; x <= xLimit; x++){
+			if(getMaterialType(texelFetch(tex_glow_source, st + ivec2(x, y), 0)) == 2u){
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 uint getMaterial(ivec2 st) {
 	uint mat_here = getMaterialType(texelFetch(tex_glow_source, st, 0));
 
@@ -337,6 +371,17 @@ uint getMaterial(ivec2 st) {
 		}
 	}
 
+	// Only expand esmissive pixels into air
+	if(mat_here != 3u) {
+		return mat_here;
+	}
+
+	// Expand emissive pixels
+	if(expand_emissive_pixels_r2(st)){
+	// if(expand_emissive_pixels_r4(st)){
+		return 2u;
+	}
+
 	return mat_here;
 }
 
@@ -350,30 +395,6 @@ float downsampleEmitters(ivec2 st){
 	}
 
 	return 0.0;
-}
-
-uint mostCommonMaterial4x4(ivec2 st){
-	uint materialCounts[16] = uint[16](0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-	for(int y = 0; y < 4; y++){
-		for(int x = 0; x < 4; x++){
-			ivec2 sample_st = st + ivec2(y, x);
-			sample_st = clamp(sample_st, ivec2(0), ivec2(GLOW_BOUNDS));
-			vec4 s = texelFetch(tex_glow_source, sample_st, 0);
-			uint material = getMaterialType(s);
-			// TODO: Early exit if greater than 8
-			materialCounts[material]++;
-		}
-	}
-
-	uint mostCommonMaterial = 0;
-	uint highestCount = 0;
-	for(int i = 0; i < 16; i++){
-		if(materialCounts[i] > highestCount){
-			highestCount = materialCounts[i];
-			mostCommonMaterial = i;
-		}
-	}
-	return mostCommonMaterial;
 }
 
 #define INV_PI 0.31830988618379067153776752674503
@@ -411,17 +432,24 @@ uvec3 sample_glow_source_st(ivec2 st){
     return color_u.rgb;
 }
 
+// A large area needs to be covered so that the top and bottom rows are able to
+// capture the color from the top 2 and bottom 2 rows of the source buffer. This also
+// reduces the chance of color lookups missing.
+// TODO: This only needs to be done for the edges, saving a lot of texture lookups
+uvec3 sample_glow_source_color_st_average_r2(ivec2 st){
+	const int radius = 2;
+	const int xLimits[3] = int[3](2, 2, 1);
 
-uvec3 sample_glow_source_st_averagenxn(ivec2 st, int size){
 	uvec3 sum = uvec3(0u);
-	uint count = 0;
-	for(int y = -size / 2; y < size / 2; y++){
-		for(int x = -size / 2; x < size / 2; x++){
-			ivec2 offset = ivec2(y, x);
-			uvec3 s = sample_glow_source_st(st + offset);
-			if(s != uvec3(0)){
+	uint count = 0u;
+
+	for(int y = -radius; y <= radius; y++){
+		int xLimit = xLimits[abs(y)];
+		for(int x = -xLimit; x <= xLimit; x++){
+			uvec3 s = sample_glow_source_st(st + ivec2(x, y));
+			if(s != uvec3(0u)){
 				sum += s;
-				count ++;
+				count++;
 			}
 		}
 	}
@@ -430,27 +458,63 @@ uvec3 sample_glow_source_st_averagenxn(ivec2 st, int size){
 		return uvec3(0u);
 	}
 
-	sum /= count;
-
-	// if(count <= 4u) {
-	// 	return uvec3(0, 15, 0);
-	// 	// sum /= count;
-	// }
-	// return uvec3(count);
-
-	return sum;
+	return sum / count;
 }
 
+uvec3 sample_glow_source_color_st_average_r4(ivec2 st){
+	const int radius = 4;
+	const int xLimits[5] = int[5](4, 3, 3, 2, 0);
 
-uvec3 sample_glow_source_st_maxnxn(ivec2 st, int size){
 	uvec3 sum = uvec3(0u);
-	for(int y = -size / 2; y < size / 2; y++){
-		for(int x = -size / 2; x < size / 2; x++){
-			ivec2 offset = ivec2(y, x);
-			sum = max(sum, sample_glow_source_st(st + offset));
+	uint count = 0u;
+
+	for(int y = -radius; y <= radius; y++){
+		int xLimit = xLimits[abs(y)];
+		for(int x = -xLimit; x <= xLimit; x++){
+			uvec3 s = sample_glow_source_st(st + ivec2(x, y));
+			if(s != uvec3(0u)){
+				sum += s;
+				count++;
+			}
 		}
 	}
-	return sum;
+
+	if(count == 0u){
+		return uvec3(0u);
+	}
+
+	return sum / count;
+}
+
+uvec3 sample_glow_source_color_st_average_r8(ivec2 st){
+	const int radius = 8;
+	const int xLimits[9] = int[9](8, 7, 7, 7, 6, 6, 5, 3, 0);
+
+	uvec3 sum = uvec3(0u);
+	uint count = 0u;
+
+	for(int y = -radius; y <= radius; y++){
+		int xLimit = xLimits[abs(y)];
+		for(int x = -xLimit; x <= xLimit; x++){
+			uvec3 s = sample_glow_source_st(st + ivec2(x, y));
+			if(s != uvec3(0u)){
+				sum += s;
+				count++;
+			}
+		}
+	}
+
+	if(count == 0u){
+		return uvec3(0u);
+	}
+
+	return sum / count;
+}
+
+uvec3 sample_glow_source_st_average(ivec2 st){
+	// return sample_glow_source_color_st_average_r2(st);
+	// return sample_glow_source_color_st_average_r4(st);
+	return sample_glow_source_color_st_average_r8(st);
 }
 
 struct SDFSample {
@@ -775,15 +839,8 @@ vec3 store_color(ivec2 vbuf_st){
     ivec2 color_1_st = scaled_st + ivec2(0, 120);
 
 
-	// A large area needs to be covered so that the top and bottom rows are able to
-	// capture the color from the top 2 and bottom 2 rows of the source buffer. This also
-	// reduces the chance of color lookups missing.
-	// TODO: This only needs to be done for the edges, saving a lot of texture lookups
-	int size_0 = 8;
-	int size_1 = 8;
-
-	uvec3 color_0 = sample_glow_source_st_averagenxn(color_0_st, size_0) & 0xF;
-	uvec3 color_1 = sample_glow_source_st_averagenxn(color_1_st, size_1) & 0xF;
+	uvec3 color_0 = sample_glow_source_st_average(color_0_st) & 0xF;
+	uvec3 color_1 = sample_glow_source_st_average(color_1_st) & 0xF;
 
 	// Test pattern should appear magenta
 	// color_0 = uvec3(15u, 15u, 0u);
