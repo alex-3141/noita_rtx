@@ -562,9 +562,6 @@ uniform float drugged_doublevision_amount;
 uniform sampler2D tex_debug;
 uniform sampler2D tex_debug2;
 
-in vec2 gggg;
-in vec2 subpixel;
-
 in vec2 tex_coord_;
 in vec2 tex_coord_y_inverted_;
 in vec2 tex_coord_glow_;
@@ -1374,15 +1371,6 @@ void main()
 	vec2 tex_coord = tex_coord_;
 	vec2 tex_coord_y_inverted = tex_coord_y_inverted_;
 	vec2 tex_coord_glow = tex_coord_glow_;
-
-	float seed = floor((tex_coord_.x - subpixel.x) * 427.0 + camera_pos.x);
-    float offset = texture2D( tex_noise, vec2( seed / 1024.0, 0.0 ) ).r + 0.5;
-	offset *= fract(max(time - 780.0,0.0) / 10.0);
-
-	// offset *= (distance(tex_coord, vec2(0.5,0.5)));
-
-	// tex_coord.y += offset;
-	// tex_coord_glow.y -= offset;
 
 // ===========================================================================================================
 // get noise. R G B and A channels each contain unique noise from the same source ============================
