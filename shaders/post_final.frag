@@ -572,13 +572,6 @@ in vec2 tex_coord_fogofwar;
 out vec4 outColor;
 
 
-
-
-
-
-
-
-
 // Noita RTX ========================================================================================
 // ==================================================================================================
 
@@ -1302,7 +1295,6 @@ vec3 render(vec2 uv) {
 }
 #endif
 
-
 // -----------------------------------------------------------------------------------------------
 
 
@@ -1333,10 +1325,10 @@ uvec3 sample_glow_source_st(ivec2 st){
 void main()
 {
 	// constants
-	const bool ENABLE_REFRACTION 			= 0>0;
-	const bool ENABLE_LIGHTING	    		= 1>1;
+	const bool ENABLE_REFRACTION 			= 1>0;
+	const bool ENABLE_LIGHTING	    		= 1>0;
 	const bool ENABLE_FOG_OF_WAR 			= 1>0;
-	const bool ENABLE_GLOW 					= 1>1;
+	const bool ENABLE_GLOW 					= 1>0;
 	const bool ENABLE_GAMMA_CORRECTION		= 1>0;
 	const bool ENABLE_PATH_DEBUG			= 1>0;
 	
@@ -1363,7 +1355,6 @@ void main()
 
 	const float SCREEN_W = 427.0;
 	const float SCREEN_H = 242.0;
-	// const float SCREEN_H = 242.0;
 
 // ==========================================================================================================
 // fetch texture coords etc =============================================================================
@@ -1454,8 +1445,8 @@ void main()
 
 		#ifdef HIQ
 			// fetch a blurred (less banded) version of the glow. the banding mostly occurs against dark backgrounds so we use the non-smooth glow where the sky is visible
-			const float GLOW_BLUR_OFFSET  = 0.02;
-			const float GLOW_BLUR_OFFSET2 = 0.02;
+			const float GLOW_BLUR_OFFSET  = 0.0025 * 0.5;
+			const float GLOW_BLUR_OFFSET2 = 0.004  * 0.5;
 
 			vec3 glow_smooth = glow;
 			glow_smooth += texture2D(tex_glow, tex_coord_glow + vec2( 0, GLOW_BLUR_OFFSET )).rgb;
@@ -1472,7 +1463,7 @@ void main()
 			float smoothing_amount = (1.0 - (glow_smooth.r + glow_smooth.g + glow_smooth.b) * 0.3333) * color_fg.a;
 			glow = mix(glow, glow_smooth, smoothing_amount );
 			glow = dither_srgb(glow, noise.r, 128.0 );
-			glow = max( vec3(0.0), glow - vec3(1.0/128.0) );
+			//glow = max( vec3(0.0), glow - vec3(1.0/128.0) );
 		#endif
 
 		glow = max( vec3(0.0), glow - 0.008 );
@@ -1569,7 +1560,6 @@ void main()
 
 		fog_of_war_amount = fog_value.r * (1.0-light_tex_sample.a); // light_tex_sample.a contains "fog of war holes" (for example temporary holes caused by explosions)
 		dust_amount = fog_value.g;
-		fog_of_war_amount = 0.0;
 	}
 
 // ============================================================================================================
@@ -1669,7 +1659,7 @@ void main()
 	color = mix(color, vec3((color.r + color.g + color.b) * 0.3333), color_grading.a);
 	color = color * color_grading.rgb;
 	vec3 color2 = color;
-	// color = mix(color2, color, clamp( color_grading.a - glow * 3.0, 0.0, 1.0 ) ); // min(sqrt(sky_ambient_amount) * 5.0, 1.0) - glow * 3.0);
+	//color = mix(color2, color, clamp( color_grading.a - glow * 3.0, 0.0, 1.0 ) ); // min(sqrt(sky_ambient_amount) * 5.0, 1.0) - glow * 3.0);
 
 // ============================================================================================================
 // apply glow effect using a variation of screen blending. the glow is reduced on areas with bright sky light =
@@ -1684,7 +1674,7 @@ void main()
 // ==========================================================================================================
 // damage flash effect ======================================================================================
 
-	// color = mix( color, vec3(1.0,0.0,0.0), damage_flash_interpolation * edge_dist * 0.7 );
+	color = mix( color, vec3(1.0,0.0,0.0), damage_flash_interpolation * edge_dist * 0.7 );
 
 // ==========================================================================================================
 // shroom color effect ======================================================================================
@@ -1702,7 +1692,7 @@ void main()
 // additive overlay ===========================================================================================
 
 	// color.rgb += additive_overlay_color.rgb * additive_overlay_color.a; // TODO: combine with damage flash
-	// color.rgb = mix( color, additive_overlay_color.rgb, additive_overlay_color.a );
+	color.rgb = mix( color, additive_overlay_color.rgb, additive_overlay_color.a );
 
 // ============================================================================================================
 // brightness / contrast=======================================================================================
@@ -1721,23 +1711,23 @@ void main()
 // ============================================================================================================
 // overlay ====================================================================================================
 
-	// color.rgb = mix( color, overlay_color.rgb, overlay_color.a );
-	// color.rgb = mix( color, overlay_color_blindness.rgb, overlay_color_blindness.a * 0.5 + overlay_color_blindness.a * edge_dist*edge_dist * 40.0);
+	color.rgb = mix( color, overlay_color.rgb, overlay_color.a );
+	color.rgb = mix( color, overlay_color_blindness.rgb, overlay_color_blindness.a * 0.5 + overlay_color_blindness.a * edge_dist*edge_dist * 40.0);
 
 // ============================================================================================================
 // low health indicator =======================================================================================
-// {
-// 	float a = length(tex_coord - vec2(0.5,0.5));
-// 	a *= 1.3;
-// 	a *= a;
-// 	a *= a;
-// 	color += LOW_HEALTH_INDICATOR_COLOR * a * low_health_indicator_alpha;
-// }
+{
+	float a = length(tex_coord - vec2(0.5,0.5));
+	a *= 1.3;
+	a *= a;
+	a *= a;
+	color += LOW_HEALTH_INDICATOR_COLOR * a * low_health_indicator_alpha;
+}
 
 // ============================================================================================================
 // various debug visualizations================================================================================
 
-	// color.r += 1.0 - fog_of_war.r;
+	//color.r += 1.0 - fog_of_war.r;
 
 	//#define DEBUG_SKYLIGHT
 	//#define DEBUG_NOISE
