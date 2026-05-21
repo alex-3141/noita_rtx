@@ -4,6 +4,7 @@ local materials = dofile_once("mods/noita_rtx/files/materials.lua")
 local sdf = dofile_once("mods/noita_rtx/files/sdf.lua")
 local texture = dofile_once("mods/noita_rtx/files/texture.lua")
 local scanner = dofile_once("mods/noita_rtx/files/scanner.lua")
+local shader = dofile_once("mods/noita_rtx/files/shader.lua")
 
 -- Cache globals
 local GameGetCameraPos = GameGetCameraPos
@@ -84,6 +85,7 @@ local push_uniforms = function()
 end
 
 local init = function()
+    shader.patch()
     texture.createTextures()
     materials.patch()
 end

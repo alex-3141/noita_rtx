@@ -1,4 +1,4 @@
-local nxml = dofile_once("mods/noita_rtx/files/lib/nxml/nxml.lua")
+local nxml = dofile_once("mods/noita_rtx/files/lib/nxml.lua")
 
 local function colorToHex(color)
     color = {
