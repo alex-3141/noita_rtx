@@ -16,10 +16,7 @@ zip: check-submodule
 	@mkdir -p $(BUILD_DIR)
 	@rm -rf $(STAGE_DIR) $(ZIP_FILE)
 	@mkdir -p $(STAGE_DIR)
-	@cp settings.lua mod.xml init.lua compatibility.xml $(STAGE_DIR)/
-	@cp -R files $(STAGE_DIR)/
-	@cp -R data $(STAGE_DIR)/
-	@rm -rf $(STAGE_DIR)/files/lib/nxml
+	@cp -R src/* $(STAGE_DIR)/
 	@mkdir -p $(STAGE_DIR)/files/lib/nxml
 	@cp nxml/nxml.lua $(STAGE_DIR)/files/lib/nxml/nxml.lua
 	@cd $(BUILD_DIR) && zip -rq noita_rtx.zip noita_rtx
