@@ -1,6 +1,13 @@
 #version 400
 #extension GL_ARB_gpu_shader5 : enable
 
+// Lygia includes
+#include "../lygia/math/const.glsl"
+#include "../lygia/color/space/srgb2rgb.glsl"
+#include "../lygia/color/space/rgb2srgb.glsl"
+#include "../lygia/color/luminance.glsl"
+
+
 // TOTAL BUFFER SIZE: 431x242
 // QUARTER RES VBUFFER SIZE: 107x60
 // LAYOUT:
@@ -73,43 +80,6 @@ uniform float		time;
 
 #define WALL vec3(1.0, 1.0, 1.0)
 #define AIR vec3(0.0, 0.0, 0.0)
-
-#ifndef SRGB_EPSILON 
-#define SRGB_EPSILON 1e-10
-#endif
-
-#ifndef FNC_SRGB2RGB
-#define FNC_SRGB2RGB
-// 1.0 / 12.92 = 0.0773993808
-// 1.0 / (1.0 + 0.055) = 0.947867298578199
-float srgb2rgb(const in float v) {   return (v < 0.04045) ? v * 0.0773993808 : pow((v + 0.055) * 0.947867298578199, 2.4); }
-vec3 srgb2rgb(const in vec3 srgb) {  return vec3(   srgb2rgb(srgb.r + SRGB_EPSILON),
-                                                    srgb2rgb(srgb.g + SRGB_EPSILON),
-                                                    srgb2rgb(srgb.b + SRGB_EPSILON)); }
-vec4 srgb2rgb(const in vec4 srgb) {  return vec4(   srgb2rgb(srgb.rgb), srgb.a); }
-#endif
-
-
-#if !defined(FNC_SATURATE) && !defined(saturate)
-#define FNC_SATURATE
-#define saturate(V) clamp(V, 0.0, 1.0)
-#endif
-
-#ifndef FNC_RGB2SRGB
-#define FNC_RGB2SRGB
-float rgb2srgb(const in float c) {   return (c < 0.0031308) ? c * 12.92 : 1.055 * pow(c, 0.4166666666666667) - 0.055; }
-vec3  rgb2srgb(const in vec3 rgb) {  return saturate(vec3(  rgb2srgb(rgb.r - SRGB_EPSILON), 
-                                                            rgb2srgb(rgb.g - SRGB_EPSILON), 
-                                                            rgb2srgb(rgb.b - SRGB_EPSILON))); }
-vec4  rgb2srgb(const in vec4 rgb) {  return vec4(rgb2srgb(rgb.rgb), rgb.a); }
-#endif
-
-
-#ifndef FNC_LUMINANCE
-#define FNC_LUMINANCE
-float luminance(in vec3 linear) { return dot(linear, vec3(0.21250175, 0.71537574, 0.07212251)); }
-float luminance(in vec4 linear) { return luminance( linear.rgb ); }
-#endif
 
 out vec4 outColor;
 
@@ -396,9 +366,6 @@ float downsampleEmitters(ivec2 st){
 
 	return 0.0;
 }
-
-#define INV_PI 0.31830988618379067153776752674503
-#define INV_SQRT_TAU 0.39894228040143267793994605993439  // 1.0/SQRT_TAU
 
 // TODO: Separate sampler functions for each vbuffer. No need to move around
 // data we don't need to.
