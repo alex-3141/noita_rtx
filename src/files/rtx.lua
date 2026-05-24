@@ -1,5 +1,6 @@
 dofile("mods/noita_rtx/files/constants.lua")
 
+local config = dofile_once("mods/noita_rtx/config.lua")
 local materials = dofile_once("mods/noita_rtx/files/materials.lua")
 local sdf = dofile_once("mods/noita_rtx/files/sdf.lua")
 local texture = dofile_once("mods/noita_rtx/files/texture.lua")
@@ -85,7 +86,10 @@ local push_uniforms = function()
 end
 
 local init = function()
-    shader.apply_patches()
+    if not config.hot_reload then
+        shader.apply_patches()
+    end
+
     texture.createTextures()
     materials.patch()
 end

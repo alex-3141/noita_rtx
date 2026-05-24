@@ -10,7 +10,7 @@ NXML := nxml/nxml.lua
 LYGIA_CHECK := lygia/math.glsl
 POST_FINAL_ORIGINAL := gamedata/shaders/post_final.frag
 
-SOURCES := compatibility.xml init.lua mod_id.txt mod.xml settings.lua files/constants.lua files/materials.lua files/rtx.lua files/scanner.lua files/sdf.lua files/texture.lua files/shader.lua
+SOURCES := compatibility.xml init.lua mod_id.txt mod.xml settings.lua config.lua files/constants.lua files/materials.lua files/rtx.lua files/scanner.lua files/sdf.lua files/texture.lua files/shader.lua
 STATIC_SHADERS := post_glow1.frag post_glow2.frag
 DYNAMIC_SHADERS := post_final.frag
 
@@ -20,6 +20,7 @@ LUA_LIB_TARGETS := $(addprefix $(STAGE_DIR)/files/lib/, $(notdir $(NXML)))
 STATIC_SHADER_TARGETS := $(addprefix $(STAGE_DIR)/data/shaders/, $(STATIC_SHADERS))
 PATCH_SHADER_TARGETS := $(addprefix $(STAGE_DIR)/files/patches/, $(DYNAMIC_SHADERS:.frag=.frag.patch.lua))
 SHADER_TARGETS := $(STATIC_SHADER_TARGETS) $(PATCH_SHADER_TARGETS)
+DEV_SHADER_TARGETS := $(addprefix $(STAGE_DIR)/data/shaders/, $(DYNAMIC_SHADERS))
 
 .PHONY: zip build install check-submodules check-gamedata clean purge
 
@@ -28,17 +29,27 @@ zip: build
 	@cd $(BUILD_DIR) && zip -rq $(notdir $(ZIP_FILE)) $(notdir $(STAGE_DIR))
 	@echo "Created $(ZIP_FILE)"
 
-build: check-submodules check-gamedata $(LUA_TARGETS) $(LUA_LIB_TARGETS) $(SHADER_TARGETS)
+build: check-submodules $(LUA_TARGETS) $(LUA_LIB_TARGETS) $(SHADER_TARGETS)
 
-install: build
+install-dev: check-install-dir dev
+	@mkdir -p "$(INSTALL_DIR)"
+	@cp -r "$(STAGE_DIR)/." "$(INSTALL_DIR)/"
+	@echo "Installed $(STAGE_DIR) to $(INSTALL_DIR)"
+
+dev: check-gamedata build $(DEV_SHADER_TARGETS)
+	@sed -i 's/hot_reload = false/hot_reload = true/' $(STAGE_DIR)/config.lua
+
+install: build check-install-dir
+	@mkdir -p "$(INSTALL_DIR)"
+	@cp -r "$(STAGE_DIR)/." "$(INSTALL_DIR)/"
+	@echo "Installed $(STAGE_DIR) to $(INSTALL_DIR)"
+
+check-install-dir:
 	@if [ -z "$(INSTALL_DIR)" ]; then \
-		echo "Usage: INSTALL_DIR=/path/to/noita/mods/noita_rtx make install"; \
-		echo "Or: export INSTALL_DIR=/path/to/noita/mods/noita_rtx && make install"; \
+		echo "Error: INSTALL_DIR not set."; \
+		echo "Set INSTALL_DIR to the path of your Noita mods directory, e.g. /path/to/noita/mods/noita_rtx"; \
 		exit 1; \
 	fi
-	mkdir -p "$(INSTALL_DIR)"
-	cp -r "$(STAGE_DIR)/." "$(INSTALL_DIR)/"
-	@echo "Installed $(STAGE_DIR) to $(INSTALL_DIR)"
 
 check-submodules:
 	@if [ ! -f $(NXML) ]; then \
@@ -85,6 +96,12 @@ $(STAGE_DIR)/files/patches/%.frag.patch.lua: $(PRE_DIR)/%.frag gamedata/shaders/
 	@mkdir -p $(@D)
 	@echo "Generating diff for $<..."
 	@luajit lib/generate_patches.lua $< $@
+
+# Dev shaders (patches applied at build time)
+$(STAGE_DIR)/data/shaders/post_final.frag: $(STAGE_DIR)/files/patches/post_final.frag.patch.lua gamedata/shaders/post_final.frag
+	@mkdir -p $(@D)
+	@echo "Generating patched shader for post_final.frag..."
+	@luajit lib/apply_patches.lua gamedata/shaders/post_final.frag $< $@
 
 clean:
 	@rm -rf $(STAGE_DIR) $(PRE_DIR) $(ZIP_FILE)
