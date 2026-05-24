@@ -1,21 +1,24 @@
--- Mock things the diff_match_patch library expects
-bit32 = bit
-os = {
-    clock = function()
-        return 0
-    end
-}
+local patch  = dofile_once("mods/noita_rtx/files/patches/post_final.frag.patch.lua")
+local shadercode  = ModTextFileGetContent("data/shaders/post_final.frag")
 
-local diff_match_patch = dofile_once("mods/noita_rtx/files/lib/diff_match_patch.lua")
-local patch_text = ModTextFileGetContent("mods/noita_rtx/files/patches/post_final.frag.patch.txt")
-local shadercode = ModTextFileGetContent("data/shaders/post_final.frag")
+-- Upgrade other mod's code to work with version 400
+local upversion = function(shadercode)
+    -- Replace `gl_FragColor' with 'outColor'
+    shadercode = shadercode:gsub("gl_FragColor", "outColor")
 
-local patch = function()
-    local patches = diff_match_patch.patch_fromText(patch_text)
-    local shadercode = diff_match_patch.patch_apply(patches, shadercode)
-    ModTextFileSetContent("data/shaders/post_final.frag", shadercode)
+    -- Replace gl_TexCoord[0] with tex_coord_
+    shadercode = shadercode:gsub("gl_TexCoord%[0%]", "tex_coord_")
+    return shadercode
+end
+
+
+local apply_patches = function()
+    shadercode = upversion(shadercode)
+
+    local patched_shadercode = patch.apply(shadercode)
+    ModTextFileSetContent("data/shaders/post_final.frag", patched_shadercode)
 end
 
 return {
-    patch = patch
+    apply_patches = apply_patches
 }

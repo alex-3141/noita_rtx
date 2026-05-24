@@ -7,7 +7,6 @@ ZIP_FILE := $(BUILD_DIR)/noita_rtx.zip
 INSTALL_DIR ?=
 
 NXML := nxml/nxml.lua
-DIFF_MATCH_PATCH := lib/diff_match_patch.lua
 LYGIA_CHECK := lygia/math.glsl
 POST_FINAL_ORIGINAL := gamedata/shaders/post_final.frag
 
@@ -16,10 +15,10 @@ STATIC_SHADERS := post_glow1.frag post_glow2.frag
 DYNAMIC_SHADERS := post_final.frag
 
 LUA_TARGETS := $(addprefix $(STAGE_DIR)/, $(SOURCES)) $(NXML)
-LUA_LIB_TARGETS := $(addprefix $(STAGE_DIR)/files/lib/, $(notdir $(NXML) $(DIFF_MATCH_PATCH)))
+LUA_LIB_TARGETS := $(addprefix $(STAGE_DIR)/files/lib/, $(notdir $(NXML)))
 
 STATIC_SHADER_TARGETS := $(addprefix $(STAGE_DIR)/data/shaders/, $(STATIC_SHADERS))
-PATCH_SHADER_TARGETS := $(addprefix $(STAGE_DIR)/files/patches/, $(DYNAMIC_SHADERS:.frag=.frag.patch.txt))
+PATCH_SHADER_TARGETS := $(addprefix $(STAGE_DIR)/files/patches/, $(DYNAMIC_SHADERS:.frag=.frag.patch.lua))
 SHADER_TARGETS := $(STATIC_SHADER_TARGETS) $(PATCH_SHADER_TARGETS)
 
 .PHONY: zip build install check-submodules check-gamedata clean purge
@@ -70,11 +69,6 @@ $(STAGE_DIR)/files/lib/nxml.lua: $(NXML)
 	@mkdir -p $(@D)
 	@cp $< $@
 
-# Diff Match Patch
-$(STAGE_DIR)/files/lib/diff_match_patch.lua: $(DIFF_MATCH_PATCH)
-	@mkdir -p $(@D)
-	@cp $< $@
-
 # Shader preprocessing
 $(PRE_DIR)/%.frag: shaders/%.frag
 	@mkdir -p $(@D)
@@ -87,10 +81,10 @@ $(STAGE_DIR)/data/shaders/%.frag: $(PRE_DIR)/%.frag
 	@cp $< $@
 
 # Shader diffs
-$(STAGE_DIR)/files/patches/%.frag.patch.txt: $(PRE_DIR)/%.frag gamedata/shaders/%.frag
+$(STAGE_DIR)/files/patches/%.frag.patch.lua: $(PRE_DIR)/%.frag gamedata/shaders/%.frag
 	@mkdir -p $(@D)
 	@echo "Generating diff for $<..."
-	@luajit lib/generate_diffs.lua gamedata/shaders/$*.frag $< $@
+	@luajit lib/generate_patches.lua $< $@
 
 clean:
 	@rm -rf $(STAGE_DIR) $(PRE_DIR) $(ZIP_FILE)

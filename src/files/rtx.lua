@@ -85,7 +85,7 @@ local push_uniforms = function()
 end
 
 local init = function()
-    shader.patch()
+    shader.apply_patches()
     texture.createTextures()
     materials.patch()
 end

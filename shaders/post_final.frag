@@ -1,9 +1,9 @@
+// REPLACE #version 110
 #version 400
+// END
 #define DITHER
 #define HIQ
-
-uniform vec4 camera_delta;
-uniform vec4 player_pos;
+//extra_define0
 
 //uniform sampler2D tex_prev;
 uniform sampler2D tex_bg;
@@ -39,7 +39,7 @@ uniform float fog_amount_background;
 uniform float fog_amount_foreground;
 
 uniform float drugged_distortion_amount;
-uniform float drugged_color_amount;    
+uniform float drugged_color_amount;
 uniform float drugged_fractals_amount;
 uniform float drugged_fractals_size;
 uniform float drugged_nightvision_amount;
@@ -48,16 +48,30 @@ uniform float drugged_doublevision_amount;
 uniform sampler2D tex_debug;
 uniform sampler2D tex_debug2;
 
+// REPLACE varying vec2 tex_coord_;
 in vec2 tex_coord_;
+// END
+// REPLACE varying vec2 tex_coord_y_inverted_;
 in vec2 tex_coord_y_inverted_;
+// END
+// REPLACE varying vec2 tex_coord_glow_;
 in vec2 tex_coord_glow_;
+// END
+// REPLACE varying vec2 world_pos;
 in vec2 world_pos;
+// END
+// REPLACE varying vec2 tex_coord_skylight;
 in vec2 tex_coord_skylight;
+// END
+// REPLACE varying vec2 tex_coord_fogofwar;
 in vec2 tex_coord_fogofwar;
-
 out vec4 outColor;
+// END
 
-
+// INSERT_BEFORE
+// // -----------------------------------------------------------------------------------------------
+// // utilities
+// START
 // Noita RTX ========================================================================================
 // ==================================================================================================
 
@@ -77,6 +91,8 @@ uniform vec4 RL_light_count;
 uniform vec4 RL_time;
 uniform vec4 RL_data;
 uniform vec4 RTX_exposure_ambient_dust;
+uniform vec4 camera_delta;
+uniform vec4 player_pos;
 
 ivec2 glow_iv = ivec2(tex_coord_glow_ * textureSize(tex_glow, 0));
 
@@ -84,7 +100,6 @@ struct VBuffer {
 	vec2 pos;
 	vec2 size;
 };
-
 
 // Virtual buffers
 // The texture is split into different zones that are used in place of extra shader passes.
@@ -572,6 +587,28 @@ vec3 sample_emitter_color(vec2 uv) {
 	return smp;
 }
 
+uvec3 sample_glow_source_st(ivec2 st){
+	uvec3 color_u = uvec3(texelFetch(tex_glow_unfiltered, st, 0).rgb * 255.0);
+
+	// Non-glow materials
+	if((color_u.r & 0x80) != 0){
+		return uvec3(0);
+	}
+
+	// Kill superbright particles
+	// uint maxChannel = max(color_u.r, max(color_u.g, color_u.b));
+	// if(maxChannel > 0xFu){
+	// 	color_u >>= 4;
+	// }
+
+    // Strip non-color bits
+    // color_u = color_u & 0xF;
+
+	// Bring back into original range
+	// color_u *= 4;
+
+    return color_u;
+}
 
 vec3 rtx_compute(in vec2 tex_coord, in vec2 tex_coord_glow){
 	vec2 tex_coord_inverted = vec2(tex_coord.x, 1.0 - tex_coord.y);
@@ -708,8 +745,7 @@ vec3 rtx_compute(in vec2 tex_coord, in vec2 tex_coord_glow){
 
 	return color;
 }
-
-
+// END
 
 // ==================================================================================================
 
@@ -788,31 +824,6 @@ vec3 render(vec2 uv) {
 #endif
 
 // -----------------------------------------------------------------------------------------------
-
-
-uvec3 sample_glow_source_st(ivec2 st){
-	uvec3 color_u = uvec3(texelFetch(tex_glow_unfiltered, st, 0).rgb * 255.0);
-
-	// Non-glow materials
-	if((color_u.r & 0x80) != 0){
-		return uvec3(0);
-	}
-
-	// Kill superbright particles
-	// uint maxChannel = max(color_u.r, max(color_u.g, color_u.b));
-	// if(maxChannel > 0xFu){
-	// 	color_u >>= 4;
-	// }
-
-    // Strip non-color bits
-    // color_u = color_u & 0xF;
-
-	// Bring back into original range
-	// color_u *= 4;
-
-    return color_u;
-}
-
 
 void main()
 {
@@ -893,7 +904,7 @@ void main()
 		tex_coord_glow += vec2( liquid_distortion_offset.x, -liquid_distortion_offset.y );
 	}
 
-   	vec2 pos_seed = vec2(camera_pos.x / SCREEN_W, camera_pos.y / SCREEN_H) + vec2( tex_coord_.x, - tex_coord_.y );
+	vec2 pos_seed = vec2(camera_pos.x / SCREEN_W, camera_pos.y / SCREEN_H) + vec2( tex_coord.x, - tex_coord.y );
 
 #ifdef TRIPPY
    	// trip distortion
@@ -1228,7 +1239,7 @@ void main()
 		#define DEBUG_PATHFINDING
 	#endif
 
-	vec2 tex_coord_debug = tex_coord_;
+	vec2 tex_coord_debug = tex_coord_.xy;
 
 	#ifdef DEBUG_SKYLIGHT
 		debug_tex_coord = vec2(-0.01,-0.05) + vec2(tex_coord_debug.x, 1.0 - tex_coord_debug.y) * vec2(64.0,40.0 * world_viewport_size.x / world_viewport_size.y) / 64.0 * 0.8;
@@ -1255,10 +1266,11 @@ void main()
 // ============================================================================================================
 // output =====================================================================================================
 
-	outColor.rgb = color;
-	outColor.a = 1.0;
+// INSERT_AFTER // output =====================================================================================================
+	color = rtx_compute(tex_coord, tex_coord_glow);
+// END
 
-	// Apply Noita RTX lighting
-	// TODO: This clobbers the rest of the shader output. Need better integration.
-	outColor.rgb = rtx_compute(tex_coord, tex_coord_glow);
+	//color.r = tex_coord_warped_lerp;
+	gl_FragColor.rgb  = color;
+	gl_FragColor.a = 1.0;
 }
