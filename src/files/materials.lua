@@ -88,13 +88,13 @@ local function patch()
     -- Base materials
     for cellData in materialsXML:each_of("CellData") do
         processMaterial(cellData)
-        logPatchedMaterial(cellData)
+        -- logPatchedMaterial(cellData)
     end
 
     -- Child materials
     for cellDataChild in materialsXML:each_of("CellDataChild") do
         processMaterial(cellDataChild)
-        logPatchedMaterial(cellDataChild)
+        -- logPatchedMaterial(cellDataChild)
     end
 
     materialsXMLString = tostring(materialsXML)
