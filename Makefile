@@ -4,6 +4,7 @@ BUILD_DIR := build
 STAGE_DIR := $(BUILD_DIR)/noita_rtx
 PRE_DIR := $(BUILD_DIR)/pre
 ZIP_FILE := $(BUILD_DIR)/noita_rtx.zip
+INSTALL_DIR ?=
 
 NXML := nxml/nxml.lua
 DIFF_MATCH_PATCH := lib/diff_match_patch.lua
@@ -21,7 +22,7 @@ STATIC_SHADER_TARGETS := $(addprefix $(STAGE_DIR)/data/shaders/, $(STATIC_SHADER
 PATCH_SHADER_TARGETS := $(addprefix $(STAGE_DIR)/files/patches/, $(DYNAMIC_SHADERS:.frag=.frag.patch.txt))
 SHADER_TARGETS := $(STATIC_SHADER_TARGETS) $(PATCH_SHADER_TARGETS)
 
-.PHONY: zip build check-submodules check-gamedata clean purge
+.PHONY: zip build install check-submodules check-gamedata clean purge
 
 zip: build
 	@rm -f $(ZIP_FILE)
@@ -29,6 +30,16 @@ zip: build
 	@echo "Created $(ZIP_FILE)"
 
 build: check-submodules check-gamedata $(LUA_TARGETS) $(LUA_LIB_TARGETS) $(SHADER_TARGETS)
+
+install: build
+	@if [ -z "$(INSTALL_DIR)" ]; then \
+		echo "Usage: INSTALL_DIR=/path/to/noita/mods/noita_rtx make install"; \
+		echo "Or: export INSTALL_DIR=/path/to/noita/mods/noita_rtx && make install"; \
+		exit 1; \
+	fi
+	mkdir -p "$(INSTALL_DIR)"
+	cp -r "$(STAGE_DIR)/." "$(INSTALL_DIR)/"
+	@echo "Installed $(STAGE_DIR) to $(INSTALL_DIR)"
 
 check-submodules:
 	@if [ ! -f $(NXML) ]; then \
