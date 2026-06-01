@@ -1,5 +1,5 @@
 // REPLACE #version 110
-#version 400
+#version 130
 // END
 #define DITHER
 #define HIQ
@@ -48,25 +48,12 @@ uniform float drugged_doublevision_amount;
 uniform sampler2D tex_debug;
 uniform sampler2D tex_debug2;
 
-// REPLACE varying vec2 tex_coord_;
-in vec2 tex_coord_;
-// END
-// REPLACE varying vec2 tex_coord_y_inverted_;
-in vec2 tex_coord_y_inverted_;
-// END
-// REPLACE varying vec2 tex_coord_glow_;
-in vec2 tex_coord_glow_;
-// END
-// REPLACE varying vec2 world_pos;
-in vec2 world_pos;
-// END
-// REPLACE varying vec2 tex_coord_skylight;
-in vec2 tex_coord_skylight;
-// END
-// REPLACE varying vec2 tex_coord_fogofwar;
-in vec2 tex_coord_fogofwar;
-out vec4 outColor;
-// END
+varying vec2 tex_coord_;
+varying vec2 tex_coord_y_inverted_;
+varying vec2 tex_coord_glow_;
+varying vec2 world_pos;
+varying vec2 tex_coord_skylight;
+varying vec2 tex_coord_fogofwar;
 
 // INSERT_BEFORE
 // // -----------------------------------------------------------------------------------------------
@@ -340,9 +327,9 @@ uvec3 getGlowLight(ivec2 iv){
 	uvec3 glow_texel_3 = uvec3(texelFetch(tex_glow, monte_carlo_iv + ivec2(1,1), 0).rgb * 255.0);
 
 	return uvec3(
-		(glow_texel_0.g << 8) | (glow_texel_0.b & 0xF0) | (glow_texel_1.g >> 4),
-		((glow_texel_1.g & 0xF) << 12) | ((glow_texel_1.b & 0xF0) << 4) | (glow_texel_2.g),
-		((glow_texel_2.b & 0xF0) << 8) | (glow_texel_3.g << 4) | (glow_texel_3.b >> 4)
+		(glow_texel_0.g << 8u) | (glow_texel_0.b & 0xF0u) | (glow_texel_1.g >> 4u),
+		((glow_texel_1.g & 0xFu) << 12u) | ((glow_texel_1.b & 0xF0u) << 4u) | (glow_texel_2.g),
+		((glow_texel_2.b & 0xF0u) << 8u) | (glow_texel_3.g << 4u) | (glow_texel_3.b >> 4u)
 	);
 }
 
@@ -356,9 +343,9 @@ vec3 getGlowColor(ivec2 hdr_iv){
 
 	uvec3 hdr_glow = uvec3(0);
 
-	hdr_glow.r = (glow_texel_0.g << 8) | (glow_texel_0.b & 0xF0) | (glow_texel_1.g >> 4);
-	hdr_glow.g = ((glow_texel_1.g & 0xF) << 12) | ((glow_texel_1.b & 0xF0) << 4) | (glow_texel_2.g);
-	hdr_glow.b = ((glow_texel_2.b & 0xF0) << 8) | (glow_texel_3.g << 4) | (glow_texel_3.b >> 4);
+	hdr_glow.r = (glow_texel_0.g << 8u) | (glow_texel_0.b & 0xF0u) | (glow_texel_1.g >> 4u);
+	hdr_glow.g = ((glow_texel_1.g & 0xFu) << 12u) | ((glow_texel_1.b & 0xF0u) << 4u) | (glow_texel_2.g);
+	hdr_glow.b = ((glow_texel_2.b & 0xF0u) << 8u) | (glow_texel_3.g << 4u) | (glow_texel_3.b >> 4u);
 
 	return vec3(hdr_glow) / 65535.0;
 }
@@ -449,6 +436,16 @@ vec3 getGlowLightBilinear(vec2 uv){
 // 	return occlusion;
 // }
 
+int rtx_bitCount(int bits) {
+	int count = 0;
+
+	while (bits > 0) {
+		count += bits & 1;
+		bits = bits >> 1;
+	}
+
+	return count;
+}
 
 vec4 DEBUG_show_num_lights(){
 	vec3 accumulated_light = vec3(0.0);
@@ -458,7 +455,7 @@ vec4 DEBUG_show_num_lights(){
 
 	int bitfield = byte.r + (byte.g << 8) + (byte.b << 16) + (byte.a << 24);
 
-	float count = float(bitCount(bitfield));
+	float count = float(rtx_bitCount(bitfield));
 
 	// TODO: This constant can be calculated somehow but I didn't want to think about it
 	vec2 coord = mod(tex_coord_, vec2(0.0189, 0.0336)) + vec2(0.02, 0.0);
@@ -467,6 +464,21 @@ vec4 DEBUG_show_num_lights(){
 	vec3 color = step(0.01, count) * digit_color * vec3(1.0, 0.0, 0.0);
 
 	return vec4(color, color == vec3(0.0) ? 0.0 : 1.0);
+}
+
+int rtx_findLSB(int bits){
+	if (bits == 0) {
+		return -1;
+	}
+
+	int index = 0;
+
+	while ((bits & 1) == 0) {
+		index += 1;
+		bits = bits >> 1;
+	}
+
+	return index;
 }
 
 vec3 getPointLightSources(){
@@ -484,7 +496,7 @@ vec3 getPointLightSources(){
 
 	vec3 test_color = vec3(0.0);
 
-	while((bit = findLSB(bitfield)) != -1){
+	while((bit = rtx_findLSB(bitfield)) != -1){
         bitfield &= (bitfield - 1);
 
 		vec4 byte_1 = texelFetch(RL_tex_light_list, ivec2(bit * 2, 1), 0);
@@ -552,27 +564,27 @@ vec3 sample_emitter_color_texel(ivec2 st){
 
     color_st /= 2;
 
-	uvec3 smp = uvec3(sample_buffer_texel(VBUF_COLOR_1, color_st) * 255.0) & 0xFF;
+	uvec3 smp = uvec3(sample_buffer_texel(VBUF_COLOR_1, color_st) * 255.0) & 0xFFu;
 
-    uvec3 color_u = uvec3(0);
+    uvec3 color_u = uvec3(0u);
 
     if(top){
         color_u = uvec3(
             smp.g,
-            smp.b >> 4,
+            smp.b >> 4u,
             smp.b
         );
     } else {
         color_u = uvec3(
-            smp.r >> 4,
+            smp.r >> 4u,
             smp.r,
-            smp.g >> 4
+            smp.g >> 4u
         );
     }
 
-    color_u = color_u & 0xF;
+    color_u = color_u & 0xFu;
 
-    vec3 color = vec3(color_u << 4) / 255.0;
+    vec3 color = vec3(color_u << 4u) / 255.0;
 
 	// if (color == vec3(0.0)) {
 	// 	return vec3(vec2(st) / VBUF_SIZE,  0.0);
@@ -591,21 +603,21 @@ uvec3 sample_glow_source_st(ivec2 st){
 	uvec3 color_u = uvec3(texelFetch(tex_glow_unfiltered, st, 0).rgb * 255.0);
 
 	// Non-glow materials
-	if((color_u.r & 0x80) != 0){
+	if((color_u.r & 0x80u) != 0u){
 		return uvec3(0);
 	}
 
 	// Kill superbright particles
 	// uint maxChannel = max(color_u.r, max(color_u.g, color_u.b));
 	// if(maxChannel > 0xFu){
-	// 	color_u >>= 4;
+	// 	color_u >>= 4u;
 	// }
 
     // Strip non-color bits
-    // color_u = color_u & 0xF;
+    // color_u = color_u & 0xFu;
 
 	// Bring back into original range
-	// color_u *= 4;
+	// color_u *= 4u;
 
     return color_u;
 }

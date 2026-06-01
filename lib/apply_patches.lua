@@ -1,13 +1,3 @@
--- Upgrade other mod's code to work with version 400
-local upgrade = function(shadercode)
-    -- Replace `gl_FragColor' with 'outColor'
-    shadercode = shadercode:gsub("gl_FragColor", "outColor")
-
-    -- Replace gl_TexCoord[0] with tex_coord_
-    shadercode = shadercode:gsub("gl_TexCoord%[0%]", "tex_coord_")
-    return shadercode
-end
-
 local script_path = arg[0]
 local script_dir = script_path:match("(.*[/\\])")
 if script_dir then
@@ -34,7 +24,6 @@ local shadercode = read_file(arg[1])
 local patch = dofile(arg[2])
 local output = arg[3] or nil
 
-local shadercode = upgrade(shadercode)
 local patched_shadercode = patch.apply(shadercode)
 
 if output then
