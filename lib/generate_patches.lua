@@ -50,16 +50,15 @@ local operations = {}
 local function emit_op()
     table.insert(operations, {
         cmd     = current_cmd,
-        search  = table.concat(search_lines, "\n"),
-        content = table.concat(content_lines, "\n"),
+        search  = table.concat(search_lines, "\r\n"),
+        content = table.concat(content_lines, "\r\n"),
     })
     current_cmd = nil
     search_lines = {}
     content_lines = {}
 end
 
-for line in (content .. "\n"):gmatch("([^\n]*)\n") do
-    line = line:gsub("\r$", "")  -- strip CRLF
+for line in (content .. "\r\n"):gmatch("(.-)\r\n") do
 
     if state == "scanning" then
         local cmd, rest = line:match("^// ([%u_]+)%s*(.-)%s*$")
@@ -108,12 +107,12 @@ local codegen = {
     INSERT_AFTER = function(op)
         return string.format(
             "do local _i, _j = content:find(%q, 1, true); if _i then content = content:sub(1, _j) .. %q .. content:sub(_j + 1) end end",
-            op.search, "\n" .. op.content)
+            op.search, "\r\n" .. op.content)
     end,
     INSERT_BEFORE = function(op)
         return string.format(
             "do local _i, _j = content:find(%q, 1, true); if _i then content = content:sub(1, _i - 1) .. %q .. content:sub(_i) end end",
-            op.search, op.content .. "\n")
+            op.search, op.content .. "\r\n")
     end,
     DELETE = function(op)
         return string.format(
@@ -122,7 +121,7 @@ local codegen = {
     end,
 }
 
-local lines = { "content = content:gsub(\"\\r\\n\", \"\\n\")  -- normalize CRLF" }
+local lines = {}
 for _, op in ipairs(operations) do
     local gen = codegen[op.cmd]
     if gen then
