@@ -610,16 +610,7 @@ uvec3 sample_glow_source_st(ivec2 st){
     return color_u;
 }
 
-vec3 rtx_compute(in vec2 tex_coord, in vec2 tex_coord_glow){
-	vec2 tex_coord_inverted = vec2(tex_coord.x, 1.0 - tex_coord.y);
-	vec4 fg_srgb = texture(tex_fg, tex_coord_inverted);
-	vec4 bg_srgb = texture(tex_bg, tex_coord_inverted);
-
-	// Don't allow too dark pixels
-	fg_srgb.rgb = max(vec3(0.01), fg_srgb.rgb);
-	vec3 fg_linear = srgb2rgb(fg_srgb.rgb);
-	vec3 bg_linear = srgb2rgb(bg_srgb.rgb);
-
+vec3 rtx_compute_light(in vec2 tex_coord, in vec2 tex_coord_glow){
 	vec3 summed_light = vec3(0.0);
 
 	vec3 point_light = getPointLightSources();
@@ -632,11 +623,7 @@ vec3 rtx_compute(in vec2 tex_coord, in vec2 tex_coord_glow){
 	vec3 glow_light = hdr_glow_unfiltered;
 	// vec3 hdr_glow = hdr_glow_uninterpolated;
 
-	float exposure = RTX_exposure_ambient_dust.x;
 	float ambient = RTX_exposure_ambient_dust.y;
-	float dust = RTX_exposure_ambient_dust.z;
-
-	vec3 dust_light = vec3(0.0);
 
 	// Light multipliers. These should balance all light sources to a common standard candle at 1.0 exposure
 	const float point_mul = 3.75;
@@ -650,21 +637,40 @@ vec3 rtx_compute(in vec2 tex_coord, in vec2 tex_coord_glow){
 	summed_light += point_light;
 	summed_light += glow_light;
 
-	// Multiply with scene and composite
-	vec3 fg_multiplied = fg_linear * summed_light;
-	vec3 bg_multiplied = bg_linear; // Probably doesn't need anyting done to it?
-	vec3 composited = mix(bg_multiplied, fg_multiplied, fg_srgb.a);
+	return summed_light;
+}
 
-	// Add dust (additive light)
-	composited += summed_light * dust;
+// Multiply with scene and composite
+vec3 rtx_composite(in vec4 fg_srgb, in vec3 bg_srgb, in vec4 fog, in vec3 light){
+	fg_srgb.rgb = mix(fg_srgb.rgb, fog.rgb, fog.a);
+	fg_srgb.a += (1.0 - fg_srgb.a) * fog.a;
 
-	// Final exposure adjustment and tonemapping
-	vec3 composited_tonemapped = tonemap(composited * exposure);
+	vec4 fg = vec4( srgb2rgb(fg_srgb.rgb), fg_srgb.a);
+	vec3 bg = srgb2rgb(bg_srgb);
 
-    // Output as sRGB
-	vec3 color = rgb2srgb(composited_tonemapped);
+	fg.rgb *= light;
 
+	vec3 composited = mix(bg, fg.rgb, fg.a);
 
+	float dust = RTX_exposure_ambient_dust.z;
+
+	// Additive light
+
+	// Flat dust amount to make light more visible on dark backgrounds
+	composited += light * dust;
+	// Shift the final color towards the fog color
+	composited = mix(composited, fog.rgb, fog.a * 0.1);
+
+	return composited;
+}
+
+vec3 rtx_tonemap(in vec3 composited){
+	float exposure = RTX_exposure_ambient_dust.x;
+	vec3 tonemapped = tonemap(composited * exposure);
+	return tonemapped;
+}
+
+vec3 rtx_debug(in vec3 color){
 	// ================ Buffer visualisations ================
 
 	// // Glow buffer
@@ -831,7 +837,9 @@ void main()
 	const bool ENABLE_REFRACTION 			= 1>0;
 	const bool ENABLE_LIGHTING	    		= 1>0;
 	const bool ENABLE_FOG_OF_WAR 			= 1>0;
-	const bool ENABLE_GLOW 					= 1>0;
+// REPLACE 	const bool ENABLE_GLOW 					= 1>0;
+	const bool ENABLE_GLOW 					= 1>1;
+// END
 	const bool ENABLE_GAMMA_CORRECTION		= 1>0;
 	const bool ENABLE_PATH_DEBUG			= 1>0;
 	
@@ -990,7 +998,9 @@ void main()
 // sample light texture =======================================================================================
 
 	vec4 light_tex_sample = texture2D(tex_lights, tex_coord);
-	vec3 lights = light_tex_sample.rgb * 0.8;
+// REPLACE 	vec3 lights = light_tex_sample.rgb * 0.8;
+	vec3 lights = rtx_compute_light(tex_coord, tex_coord_glow);
+// END
 
 // ============================================================================================================
 // fetch skylight contribution from a texture =================================================================
@@ -1068,25 +1078,31 @@ void main()
 // ============================================================================================================
 // get sky light color ========================================================================================
 	
-	lights = pow( lights, vec3( 1.5 ) );
-
-	// apply light from the glow buffer ---
-	lights += glow; 
+// DELETE
+// 	lights = pow( lights, vec3( 1.5 ) );
+// 
+// 	// apply light from the glow buffer ---
+// 	lights += glow; 
+// END
 
 	vec3 sky_light = sky_light_color.rgb * sky_ambient_amount;
 
-	// apply light from the sky ---
-	//sky_ambient_amount = max(0.0,sky_ambient_amount);
-	lights -= sky_light;
-	lights = max(lights,vec3(0.0));
-	lights += sky_light;
-	lights = min( lights, vec3(1.0) );
-
-	// correct the gamma
-	if (ENABLE_GAMMA_CORRECTION)
-		lights = pow(lights, vec3(1.0 / 2.2));
-
-	lights = dither_srgb(lights, noise.g, 128.0);
+// REPLACE
+// 	// apply light from the sky ---
+// 	//sky_ambient_amount = max(0.0,sky_ambient_amount);
+// 	lights -= sky_light;
+// 	lights = max(lights,vec3(0.0));
+// 	lights += sky_light;
+// 	lights = min( lights, vec3(1.0) );
+// 
+// 	// correct the gamma
+// 	if (ENABLE_GAMMA_CORRECTION)
+// 		lights = pow(lights, vec3(1.0 / 2.2));
+// 
+// 	lights = dither_srgb(lights, noise.g, 128.0);
+// START
+	lights += srgb2rgb(sky_light);
+// END
 	
 // ==========================================================================================================
 // fog of war ================================================================================================
@@ -1101,7 +1117,8 @@ void main()
 	fog_of_war = min( vec3(1.0), max( dither_srgb( 2.0 * fog_of_war, noise.b, 32.0 ), fog_of_war_sky_ambient_amount ) );
 
 	lights *= fog_of_war;
-	lights += max(0.35 - fog_of_war_sky_ambient_amount, 0.0) * dither_srgb( fog_of_war, noise.b, 128.0 );
+// DELETE  	lights += max(0.35 - fog_of_war_sky_ambient_amount, 0.0) * dither_srgb( fog_of_war, noise.b, 128.0 );
+// END
 
 // ==========================================================================================================
 // apply fog ================================================================================================
@@ -1120,8 +1137,11 @@ void main()
 	fog_amount = fog_amount_fg * fog_amount;
 	
 	// apply fog to bg
-	color = mix(color, fog_color_bg, fog_amount_background);
-	color = mix(color , dither_srgb(color, noise.a, 64.0 ), fog_amount );
+// We do this ourselvess during compositing
+// DELETE
+// 	color = mix(color, fog_color_bg, fog_amount_background);
+// 	color = mix(color , dither_srgb(color, noise.a, 64.0 ), fog_amount );
+// END
 
 // ==========================================================================================================
 // nightvision ==============================================================================================
@@ -1135,29 +1155,51 @@ void main()
 // blend foreground and background ==========================================================================
 
 	// reverse the blending effects applied when composing foreground layers
-	color_fg.a   = pow(color_fg.a, 0.5);
-	color_fg.rgb = color_fg.rgb * ( 1.0 / color_fg.a );
-	color_fg.rgb = clamp(color_fg.rgb, vec3(0.0,0.0,0.0), vec3(1.0,1.0,1.0));
+// REPLACE
+// 	color_fg.a   = pow(color_fg.a, 0.5);
+// 	color_fg.rgb = color_fg.rgb * ( 1.0 / color_fg.a );
+// 	color_fg.rgb = clamp(color_fg.rgb, vec3(0.0,0.0,0.0), vec3(1.0,1.0,1.0));
+// START
+	// Avoid UB
+	if (color_fg.a > 0.0 && color_fg.a < 1.0) {
+		color_fg.a   = sqrt(color_fg.a);
+		color_fg.rgb = color_fg.rgb * ( 1.0 / color_fg.a);
+	}
+// END
+
 
 	// apply the lighting to the foreground
-	if (ENABLE_LIGHTING)
-		color_fg.rgb *= lights;
+// DELETE
+// 	if (ENABLE_LIGHTING)
+// 		color_fg.rgb *= lights;
+// END
 
 	// fog
-	color_fg.rgb = mix( color_fg.rgb, fog_color_fg.rgb, fog_amount_fg * fog_amount_multiplier_final );
-
-	// combine foreground and background
-	// NOTE( Petri ): Apparently the sky can sometimes be black and color_fg.a being 0 is at fault for that
-	// Credit to Noita community for finding this bug.
-	if( color_fg.a == 0.0 ) {
-		color = color;
-	} else {
-		color = color_fg.rgb * color_fg.a + color * (1.0-color_fg.a);
-	}
-
+// REPLACE
+// 	color_fg.rgb = mix( color_fg.rgb, fog_color_fg.rgb, fog_amount_fg * fog_amount_multiplier_final );
+// 
+// 	// combine foreground and background
+// 	// NOTE( Petri ): Apparently the sky can sometimes be black and color_fg.a being 0 is at fault for that
+// 	// Credit to Noita community for finding this bug.
+// 	if( color_fg.a == 0.0 ) {
+// 		color = color;
+// 	} else {
+// 		color = color_fg.rgb * color_fg.a + color * (1.0-color_fg.a);
+// 	}
+// START
+	vec4 rtx_fog = vec4(fog_color_fg.rgb, fog_amount_fg * fog_amount_multiplier_final);
+	// "color" is background layer, and becomes the combined composite after this line
+	color = rtx_composite(color_fg, color, rtx_fog, lights);
+// END
 
 // ============================================================================================================
 // color correction effect ====================================================================================
+// INSERT_AFTER // color correction effect ====================================================================================
+	// Tonemap
+	color = rtx_tonemap(color);
+	// Convert back to SRGB. The color grading after this step would be authored in SRGB space.
+	color = rgb2srgb(color);
+// END
 
 	color = mix(color, vec3((color.r + color.g + color.b) * 0.3333), color_grading.a);
 	color = color * color_grading.rgb;
@@ -1167,12 +1209,14 @@ void main()
 // ============================================================================================================
 // apply glow effect using a variation of screen blending. the glow is reduced on areas with bright sky light =
 
-	if (ENABLE_GLOW)
-	{
-		vec3 sky_light_modulation = max( vec3(1.0 - sky_ambient_amount), sky_light_color.rgb );
-		glow *= fog_of_war;
-		color = max ( color + glow * 0.6 - 0.6 * lights, clamp((color + glow) - ( color * sky_light_modulation * glow), 0.0, 1.0));
-	}
+// DELETE
+// 	if (ENABLE_GLOW)
+// 	{
+// 		vec3 sky_light_modulation = max( vec3(1.0 - sky_ambient_amount), sky_light_color.rgb );
+// 		glow *= fog_of_war;
+// 		color = max ( color + glow * 0.6 - 0.6 * lights, clamp((color + glow) - ( color * sky_light_modulation * glow), 0.0, 1.0));
+// 	}
+// END
 
 // ==========================================================================================================
 // damage flash effect ======================================================================================
@@ -1265,10 +1309,6 @@ void main()
 
 // ============================================================================================================
 // output =====================================================================================================
-
-// INSERT_AFTER // output =====================================================================================================
-	color = rtx_compute(tex_coord, tex_coord_glow);
-// END
 
 	//color.r = tex_coord_warped_lerp;
 	gl_FragColor.rgb  = color;
