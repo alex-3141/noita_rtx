@@ -101,23 +101,16 @@ end
 local codegen = {
     REPLACE = function(op)
         return string.format(
-            "do local _i, _j = content:find(%q, 1, true); if _i then content = content:sub(1, _i - 1) .. %q .. content:sub(_j + 1) end end",
-            op.search, op.content)
+            "content = replace(content, %q, %q)", op.search, op.content)
     end,
     INSERT_AFTER = function(op)
-        return string.format(
-            "do local _i, _j = content:find(%q, 1, true); if _i then content = content:sub(1, _j) .. %q .. content:sub(_j + 1) end end",
-            op.search, "\r\n" .. op.content)
+        return string.format("content = insert_after(content, %q, %q)", op.search, op.content)
     end,
     INSERT_BEFORE = function(op)
-        return string.format(
-            "do local _i, _j = content:find(%q, 1, true); if _i then content = content:sub(1, _i - 1) .. %q .. content:sub(_i) end end",
-            op.search, op.content .. "\r\n")
+        return string.format("content = insert_before(content, %q, %q)", op.search, op.content)
     end,
     DELETE = function(op)
-        return string.format(
-            "do local _i, _j = content:find(%q, 1, true); if _i then content = content:sub(1, _i - 1) .. content:sub(_j + 1) end end",
-            op.search)
+        return string.format("content = delete(content, %q)", op.search)
     end,
 }
 
@@ -131,7 +124,52 @@ for _, op in ipairs(operations) do
     end
 end
 
+
+local patch_ops = '\
+local function replace(content, target, replacement)\
+    local _i, _j = content:find(target, 1, true)\
+    if _i then\
+        content = content:sub(1, _i - 1) .. replacement .. content:sub(_j + 1)\
+    else\
+        print(string.format("[Noita RTX] Failed to replace target text.\\nTarget: %q\\n\\nReplacement: %q", target, replacement))\
+    end\
+    return content\
+end\
+\
+local function insert_after(content, target, replacement)\
+    local _i, _j = content:find(target, 1, true);\
+    if _i then\
+        content = content:sub(1, _j) .. "\\r\\n" .. replacement .. content:sub(_j + 1)\
+    else\
+        print(string.format("[Noita RTX] Failed to insert after target text.\\nTarget: %q\\n\\nReplacement: %q", target, replacement))\
+    end\
+    return content\
+end\
+\
+\
+local function insert_before(content, target, replacement)\
+    local _i, _j = content:find(target, 1, true);\
+    if _i then\
+        content = content:sub(1, _i - 1) .. replacement .. "\\r\\n" .. content:sub(_i)\
+    else\
+        print(string.format("[Noita RTX] Failed to insert before target text.\\nTarget: %q\\n\\nReplacement: %q", target, replacement))\
+    end\
+    return content\
+end\
+\
+local function delete(content, target)\
+    local _i, _j = content:find(target, 1, true);\
+    if _i then\
+        content = content:sub(1, _i - 1) .. content:sub(_j + 1)\
+    else\
+        print(string.format("[Noita RTX] Failed to delete target text.\\nTarget: %q", target))\
+    end\
+    return content\
+end\
+'
+
 local generated_code = table.concat({
+    patch_ops,
     "return {apply = function(content)",
     table.concat(lines, "\n"),
     "return content end}",
