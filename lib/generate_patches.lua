@@ -100,8 +100,7 @@ end
 -- All search strings use plain (literal) matching via string.find(..., 1, true).
 local codegen = {
     REPLACE = function(op)
-        return string.format(
-            "content = replace(content, %q, %q)", op.search, op.content)
+        return string.format("content = replace(content, %q, %q)", op.search, op.content)
     end,
     INSERT_AFTER = function(op)
         return string.format("content = insert_after(content, %q, %q)", op.search, op.content)
@@ -125,48 +124,7 @@ for _, op in ipairs(operations) do
 end
 
 
-local patch_ops = '\
-local function replace(content, target, replacement)\
-    local _i, _j = content:find(target, 1, true)\
-    if _i then\
-        content = content:sub(1, _i - 1) .. replacement .. content:sub(_j + 1)\
-    else\
-        print(string.format("[Noita RTX] Failed to replace target text.\\nTarget: %q\\n\\nReplacement: %q", target, replacement))\
-    end\
-    return content\
-end\
-\
-local function insert_after(content, target, replacement)\
-    local _i, _j = content:find(target, 1, true);\
-    if _i then\
-        content = content:sub(1, _j) .. "\\r\\n" .. replacement .. content:sub(_j + 1)\
-    else\
-        print(string.format("[Noita RTX] Failed to insert after target text.\\nTarget: %q\\n\\nReplacement: %q", target, replacement))\
-    end\
-    return content\
-end\
-\
-\
-local function insert_before(content, target, replacement)\
-    local _i, _j = content:find(target, 1, true);\
-    if _i then\
-        content = content:sub(1, _i - 1) .. replacement .. "\\r\\n" .. content:sub(_i)\
-    else\
-        print(string.format("[Noita RTX] Failed to insert before target text.\\nTarget: %q\\n\\nReplacement: %q", target, replacement))\
-    end\
-    return content\
-end\
-\
-local function delete(content, target)\
-    local _i, _j = content:find(target, 1, true);\
-    if _i then\
-        content = content:sub(1, _i - 1) .. content:sub(_j + 1)\
-    else\
-        print(string.format("[Noita RTX] Failed to delete target text.\\nTarget: %q", target))\
-    end\
-    return content\
-end\
-'
+local patch_ops = read_file("lib/patch_ops.lua")
 
 local generated_code = table.concat({
     patch_ops,
