@@ -63,6 +63,8 @@ varying vec2 tex_coord_fogofwar;
 // ==================================================================================================
 
 // Lygia includes
+#undef DIGITS_SIZE
+#define DIGITS_SIZE vec2(0.25)
 #include "../lygia/draw/digits.glsl"
 #define TONEMAP_FNC tonemapUncharted
 #include "../lygia/color/tonemap.glsl"
@@ -72,7 +74,8 @@ varying vec2 tex_coord_fogofwar;
 // COMMON
 
 uniform sampler2D RL_tex_lights;
-uniform sampler2D RL_tex_light_list;
+uniform sampler2D RL_tex_lights_list;
+uniform sampler2D RL_tex_lights_cells;
 uniform sampler2D RL_tex_df;
 uniform vec4 RL_light_count;
 uniform vec4 RL_time;
@@ -447,73 +450,74 @@ int rtx_bitCount(int bits) {
 	return count;
 }
 
-vec4 DEBUG_show_num_lights(){
-	vec3 accumulated_light = vec3(0.0);
-	ivec2 cell_coord = ivec2(tex_coord_y_inverted_ * textureSize(RL_tex_lights, 0));
+vec4 rtx_debug_light_count(in vec2 uv){
+	ivec2 cell_coord = ivec2(uv * textureSize(RL_tex_lights_cells, 0));
 
-	ivec4 byte = ivec4(texelFetch(RL_tex_lights, cell_coord, 0) * 255.0);
+	vec4 texel = texelFetch(RL_tex_lights_cells, cell_coord, 0);
 
-	int bitfield = byte.r + (byte.g << 8) + (byte.b << 16) + (byte.a << 24);
+	float count = texel.g * 255.0;
 
-	float count = float(rtx_bitCount(bitfield));
+	// return vec4(vec3(count) / 255.0, 1.0);
 
-	// TODO: This constant can be calculated somehow but I didn't want to think about it
-	vec2 coord = mod(tex_coord_, vec2(0.0189, 0.0336)) + vec2(0.02, 0.0);
-	vec3 digit_color = vec3( digits( coord, float(count), 0.0, 0.0));
+	vec2 local_uv = mod(uv * vec2(430.0, 242.0), 16.0) / 16.0;
 
-	vec3 color = step(0.01, count) * digit_color * vec3(1.0, 0.0, 0.0);
+	// return vec4(local_uv, 0.0, 1.0);
+
+	vec3 digit = vec3( digits( local_uv, count, 0.0, 0.0));
+
+	vec3 color = step(0.01, count) * digit * vec3(1.0, 0.0, 0.0);
 
 	return vec4(color, color == vec3(0.0) ? 0.0 : 1.0);
 }
 
-int rtx_findLSB(int bits){
-	if (bits == 0) {
-		return -1;
-	}
 
-	int index = 0;
+struct Light {
+	vec3 color;
+	vec2 pos;
+};
 
-	while ((bits & 1) == 0) {
-		index += 1;
-		bits = bits >> 1;
-	}
+Light getLightHigh(in uint index) {
+	vec3 color = texelFetch(RL_tex_lights, ivec2(index, 0), 0).rgb;
 
-	return index;
+	uvec4 pos_texel = uvec4(texelFetch(RL_tex_lights, ivec2(index, 1), 0) * 255.0);
+	vec2 pos = vec2(
+		float(pos_texel.r | (pos_texel.g << 8)) / 65535.0,
+		float(pos_texel.b | (pos_texel.a << 8)) / 65535.0
+	);
+
+	return Light (color, pos);
 }
 
-vec3 getPointLightSources(){
+// TODO: Low precision version that uses 1 pixel
+//       R: 4 bits
+//       G: 4 bits
+//       B: 4 bits
+//       X: 10 bits
+//       Y: 10 bits
+Light getLightLow(in uint index) {
+	vec3 color = vec3(0.0);
+
+	vec2 pos = vec2(0.0);
+
+	return Light (color, pos);
+}
+
+vec3 getPointLightSources(in vec2 uv){
 	vec3 accumulated_light = vec3(0.0);
-	ivec2 cell_coord = ivec2(tex_coord_y_inverted_ * textureSize(RL_tex_lights, 0));
+	ivec2 cell_coord = ivec2(uv * textureSize(RL_tex_lights_cells, 0));
 
-	ivec4 byte = ivec4(texelFetch(RL_tex_lights, cell_coord, 0) * 255.0);
+	vec4 texel = texelFetch(RL_tex_lights_cells, cell_coord, 0);
 
-	int bitfield = byte.r + (byte.g << 8) + (byte.b << 16) + (byte.a << 24);
+	uint light_index = uint(texel.r * 255.0);
+	uint light_count = uint(texel.g * 255.0);
 
-	int bit;
-	int test_count = 0;
+	for(uint i = 0u; i < light_count; i++) {
+		Light light = getLightHigh(i);
 
-	// vec3 terrain_normal = sample_terrain_normal();
+		vec3 point_light = cast_ray_point(light.pos, srgb2rgb(light.color));
 
-	vec3 test_color = vec3(0.0);
+		// Depth hinting
 
-	while((bit = rtx_findLSB(bitfield)) != -1){
-        bitfield &= (bitfield - 1);
-
-		vec4 byte_1 = texelFetch(RL_tex_light_list, ivec2(bit * 2, 1), 0);
-		vec4 byte_2 = texelFetch(RL_tex_light_list, ivec2(bit * 2 + 1, 1), 0);
-
-		vec2 light_pos = vec2(byte_1.r, byte_1.g);
-		// vec3 light_color = byte_2.rgb;
-		vec3 light_color = floor(byte_2.rgb * 15.0) / 15.0;
-
-		// DEBUG: Verify that light sources align with the entity
-		// float dist_from_light = step(distance(light_pos, tex_coord_y_inverted_), 0.03);
-		// test_color += vec3(dist_from_light) * light_color;
-		// test_color += vec3(dist_from_light) * byte_1.b;
-
-		vec3 point_light = cast_ray_point(light_pos, srgb2rgb(light_color));
-
-		// TODO: Phong
 		// if (d_here <= 0.0){
 		// 	vec3 light_dir = normalize(vec3(light_pos, 0.0) - vec3(tex_coord_y_inverted_, 0.0));
 		// 	// Additive
@@ -532,8 +536,6 @@ vec3 getPointLightSources(){
 
 		accumulated_light += point_light;
 	}
-
-	// return test_color;
 
 	return accumulated_light;
 }
@@ -625,7 +627,7 @@ uvec3 sample_glow_source_st(ivec2 st){
 vec3 rtx_compute_light(in vec2 tex_coord, in vec2 tex_coord_glow){
 	vec3 summed_light = vec3(0.0);
 
-	vec3 point_light = getPointLightSources();
+	vec3 point_light = getPointLightSources(tex_coord);
 	vec2 coord_glow_compensated = tex_coord_glow + camera_compensation() / GLOW_BOUNDS;
 	// vec3 hdr_glow_unfiltered = sample_hdr_buffer(HDR_VBUF_0, coord_glow_compensated);
 	// vec3 hdr_glow_unfiltered = sample_hdr_buffer_gaussian_5x5(HDR_VBUF_0, coord_glow_compensated);
@@ -1286,6 +1288,10 @@ void main()
 // ============================================================================================================
 // various debug visualizations================================================================================
 
+// INSERT_AFTER // various debug visualizations================================================================================
+	// color += rtx_debug_light_count(tex_coord).rgb;
+// END
+
 	//color.r += 1.0 - fog_of_war.r;
 
 	//#define DEBUG_SKYLIGHT
@@ -1325,4 +1331,7 @@ void main()
 	//color.r = tex_coord_warped_lerp;
 	gl_FragColor.rgb  = color;
 	gl_FragColor.a = 1.0;
+// INSERT_AFTER gl_FragColor.a = 1.0;
+	// gl_FragColor.rgb += texture2D(RL_tex_lights_cells, tex_coord).rgb * 8.0;
+// END
 }

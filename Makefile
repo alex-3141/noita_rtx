@@ -10,7 +10,7 @@ NXML := nxml/nxml.lua
 LYGIA_CHECK := lygia/math.glsl
 POST_FINAL_ORIGINAL := gamedata/shaders/post_final.frag
 
-SOURCES := compatibility.xml init.lua mod_id.txt mod.xml settings.lua config.lua files/constants.lua files/materials.lua files/rtx.lua files/scanner.lua files/sdf.lua files/texture.lua files/shader.lua
+SOURCES := compatibility.xml init.lua mod_id.txt mod.xml settings.lua config.lua files/constants.lua files/materials.lua files/rtx.lua files/scanner.lua files/sdf.lua files/texture.lua files/shader.lua files/lights.lua
 STATIC_SHADERS := post_glow1.frag post_glow2.frag
 DYNAMIC_SHADERS := post_final.frag
 
