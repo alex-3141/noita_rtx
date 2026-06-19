@@ -143,7 +143,7 @@ local get_light_sources = function()
 
     -- Get all entities in the world
     -- TOOD: can this be made more efficient?
-    local allEnts = EntityGetInRadius(camera_x, camera_y, 4000)
+    local allEnts = EntityGetInRadius(camera_x, camera_y, 250)
 
     local lights = {}
 
