@@ -1,76 +1,6 @@
 #version 400
 #extension GL_ARB_gpu_shader5 : enable
 
-// Lygia includes
-#include "../lygia/math/const.glsl"
-#include "../lygia/color/space/srgb2rgb.glsl"
-#include "../lygia/color/space/rgb2srgb.glsl"
-#include "../lygia/color/luminance.glsl"
-
-
-// TOTAL BUFFER SIZE: 431x242
-// QUARTER RES VBUFFER SIZE: 107x60
-// LAYOUT:
-//     X: 107, 107, 107, 107, 2
-//     Y: 60, 60, 1, 121
-
-// TODO: Clear distinction between size and bounds like done lower down
-struct VBuffer {
-	vec2 pos;
-	vec2 bounds;
-};
-
-// Virtual buffers
-// The texture is split into different zones that are used in place of extra shader passes.
-const vec2 GLOW_SIZE = vec2(431.0, 242.0);
-const vec2 GLOW_BOUNDS = GLOW_SIZE - vec2(1.0);
-
-const vec2 VBUF_SIZE = vec2(106.0, 60.0);
-const vec2 VBUF_SIZE_UV = VBUF_SIZE / GLOW_SIZE;
-const vec2 VBUF_BOUNDS = VBUF_SIZE - vec2(1.0);
-const vec2 VBUF_BOUNDS_UV = VBUF_BOUNDS / GLOW_BOUNDS;
-
-const float HALF_WIDTH = GLOW_SIZE.x / 2.0;
-
-const vec2 HDR_VBUF_SIZE = vec2(HALF_WIDTH, 60.0);
-const vec2 HDR_VBUF_SIZE_UV = HDR_VBUF_SIZE / GLOW_SIZE;
-const vec2 HDR_VBUF_BOUNDS = HDR_VBUF_SIZE - vec2(1.0);
-const vec2 HDR_VBUF_BOUNDS_UV = HDR_VBUF_BOUNDS / GLOW_BOUNDS;
-
-const float COLOR_VBUF_WIDTH = HALF_WIDTH;
-const vec2 COLOR_VBUF_SIZE = vec2(COLOR_VBUF_WIDTH, 60.0);
-const vec2 COLOR_VBUF_SIZE_UV = COLOR_VBUF_SIZE / GLOW_SIZE;
-const vec2 COLOR_VBUF_BOUNDS = COLOR_VBUF_SIZE - vec2(1.0);
-const vec2 COLOR_VBUF_BOUNDS_UV = COLOR_VBUF_BOUNDS / GLOW_BOUNDS;
-
-
-const VBuffer VBUF_COLOR_0 = VBuffer(vec2(0.0, 0.0), COLOR_VBUF_BOUNDS);
-const VBuffer VBUF_COLOR_1 = VBuffer(vec2(0.0, COLOR_VBUF_SIZE.y), COLOR_VBUF_BOUNDS);
-const VBuffer HDR_VBUF_0 = VBuffer(vec2(HDR_VBUF_SIZE.x, HDR_VBUF_SIZE.y), HDR_VBUF_BOUNDS);
-const VBuffer SDF = VBuffer(vec2(0, 120), vec2(430, 121));
-const VBuffer EMITTER_SDF = VBuffer(vec2(HALF_WIDTH, 0), vec2(107, 59));
-
-
-#define MIN_EXPOSURE 65535
-#define MAX_EXPOSURE 16777215
-
-// EXPOSURE_BLEND: How quickly exposure adapts to changes (per frame).
-// Range: 0.01 - 0.5 | Lower = slower/smoother, Higher = faster/snappier
-// 0.1 ≈ 10 frames to mostly adapt, 0.02 ≈ 50 frames
-// TODO: Make this nonlinear?
-#define EXPOSURE_BLEND 0.1
-
-// ============================================================================
-
-// Physical texture size
-#define WIDTH 431.0
-#define HEIGHT 242.0
-
-#define HDR_WIDTH 215.0
-#define HDR_HEIGHT 121.0
-
-#define PACK_FLOAT_RANGE 8.0
-
 // inputs
 uniform sampler2D 	tex_glow_source;
 uniform sampler2D 	tex_glow_source_particles;
@@ -78,110 +8,25 @@ uniform sampler2D 	tex_glow_prev_frame;
 uniform vec2        one_per_glow_texture_size;
 uniform float		time;
 
-#define WALL vec3(1.0, 1.0, 1.0)
-#define AIR vec3(0.0, 0.0, 0.0)
-
 out vec4 outColor;
 
-ivec2 st = ivec2(gl_FragCoord.xy);
+#define BUFFER tex_glow_prev_frame
+
+// Lygia includes
+#include "../lygia/math/const.glsl"
+#include "../lygia/color/space/srgb2rgb.glsl"
+#include "../lygia/color/space/rgb2srgb.glsl"
+#include "../lygia/color/luminance.glsl"
+
+// Other includes
+#include "./lib/common.frag"
+#include "./lib/vbuffer.frag"
+#include "./lib/material.frag"
+#include "./lib/sdf.frag"
+
+// ============================================================================
+
 vec2 uv = gl_FragCoord.xy / GLOW_BOUNDS;
-
-// Pack an unsigned integer into 3 8-bit channels (24 bits)
-// Input value goes from 32 to 24 bit precision
-vec3 packUint24(uint value){
-	uint bits = value & 0xFFFFFFu;
-
-	float r = float((bits >> 16) & 0xFFu) / 255.0;
-	float g = float((bits >> 8) & 0xFFu) / 255.0;
-	float b = float(bits & 0xFFu) / 255.0;
-
-	return vec3(r, g, b);
-}
-
-// Unpack an unsigned integer from 3 8-bit channels (24 bits)
-uint unpackUint24(vec3 value){
-	uint r = uint(value.r * 255.0) & 0xFFu;
-	uint g = uint(value.g * 255.0) & 0xFFu;
-	uint b = uint(value.b * 255.0) & 0xFFu;
-
-	return (r << 16) | (g << 8) | b;
-}
-
-// Pack a signed float into 3 8-bit channels (24 bits)
-// Range is -PACK_FLOAT_RANGE/2 to +PACK_FLOAT_RANGE/2
-vec3 packSnorm24(float value){
-	float halfRange = PACK_FLOAT_RANGE * 0.5;
-	value = clamp(value + halfRange, 0.0, PACK_FLOAT_RANGE); // Shift to unsigned range
-	uint bits = uint(value * 65536.0 / PACK_FLOAT_RANGE) & 0xFFFFFFu;
-
-	float r = float((bits >> 16) & 0xFFu) / 255.0;
-	float g = float((bits >> 8) & 0xFFu) / 255.0;
-	float b = float(bits & 0xFFu) / 255.0;
-
-	return vec3(r, g, b);
-}
-
-// Unpack a signed float from 3 8-bit channels (24 bits)
-float unpackSnorm24(vec3 pack){
-	uint r = uint(pack.r * 255.0) & 0xFFu;
-	uint g = uint(pack.g * 255.0) & 0xFFu;
-	uint b = uint(pack.b * 255.0) & 0xFFu;
-
-	uint bits = (r << 16) | (g << 8) | b;
-
-	float halfRange = PACK_FLOAT_RANGE * 0.5;
-	return (float(bits) / 65536.0 * PACK_FLOAT_RANGE) - halfRange;
-}
-
-// Pack a signed float (16 bits) and uint (8 bits) into 3 8-bit channels
-// Float range is -PACK_FLOAT_RANGE/2 to +PACK_FLOAT_RANGE/2
-// Uint range is 0 to 255
-vec3 packSnorm16Uint8(float value, uint count){
-	float halfRange = PACK_FLOAT_RANGE * 0.5;
-	value = clamp(value + halfRange, 0.0, PACK_FLOAT_RANGE);
-	uint floatBits = uint(value * 65535.0 / PACK_FLOAT_RANGE) & 0xFFFFu;
-
-	float r = float((floatBits >> 8) & 0xFFu) / 255.0;
-	float g = float(floatBits & 0xFFu) / 255.0;
-	float b = float(count & 0xFFu) / 255.0;
-
-	return vec3(r, g, b);
-}
-
-// Unpack a signed float (16 bits) and uint (8 bits) from 3 8-bit channels
-// Returns vec2(float, count)
-vec2 unpackSnorm16Uint8(vec3 pack){
-	uint r = uint(pack.r * 255.0) & 0xFFu;
-	uint g = uint(pack.g * 255.0) & 0xFFu;
-	uint b = uint(pack.b * 255.0) & 0xFFu;
-
-	uint floatBits = (r << 8) | g;
-	float count = float(b);
-
-	float halfRange = PACK_FLOAT_RANGE * 0.5;
-	float value = (float(floatBits) / 65535.0 * PACK_FLOAT_RANGE) - halfRange;
-
-	return vec2(value, count);
-}
-
-vec3 sample_buffer_texel(VBuffer vbuffer, ivec2 st) {
-	st += ivec2(vbuffer.pos);
-	return texelFetch(tex_glow_prev_frame, st, 0).rgb;
-}
-
-vec3 sample_buffer(VBuffer vbuffer, vec2 uv) {
-	uv *= vbuffer.bounds / GLOW_BOUNDS;
-	uv += vbuffer.pos / GLOW_SIZE;
-	return texture2D(tex_glow_prev_frame, uv).rgb;
-}
-
-#define FRAME_COUNTER ivec2(430, 0)
-
-int get_frame(){
-	vec4 t = texelFetch(tex_glow_prev_frame, FRAME_COUNTER, 0);
-	int frame = int(t.r * 255.0 + t.g * 255.0 * 256.0 + t.b * 255.0 * 256.0 * 256.0);
-	return frame;
-}
 
 vec3 advance_frame(){
 	int frame = get_frame();
@@ -194,97 +39,16 @@ vec3 advance_frame(){
 	return color;
 }
 
-#define R 32 // Detail vs performance tradeoff
-#define RF float(R)
-
-
-const uint MATERIAL_ROCK_SOIL = 0;
-const uint MATERIAL_BRICK = 1;
-const uint MATERIAL_SAND = 2;
-const uint MATERIAL_LIQUID = 3;
-const uint MATERIAL_METAL = 4;
-const uint MATERIAL_GLASS_ICE_CRYSTAL = 4;
-const uint MATERIAL_EMITTER_LIQUID = 14;
-const uint MATERIAL_EMITTER_SOLID = 15;
-
-
-// Material types
-// Opaque               0
-// Liquid				1
-// Emissive             2
-// Air or Gas           3
-
-uint getMaterialType(vec4 color){
-	uvec4 color_u = uvec4(color * 255.0);
-
-	// Alpha values between 0.0 and 1.0 are fire particles
-	// TODO: The exact alpha value may be from the RENDER_FIRE_GLOW_ALPHA magic number
-	// Alpha values of 1.0 are liquids
-
-	// Liquid. non-emissive
-	if ((color_u.r & 64u) != 0u && color.a == 1.0){
-		return 1u;
-	}
-
-	// Opaque
-	if((color_u.r & 64u) != 0u){
-		return 0u;
-	}
-
-	// ==== Firefly filtering ====
-
-	// Kill superbright gas particles. These particles render closer to white than other particles
-	if(color.a > 0.0 && color.a < 1.0 && dot(color.rgb, vec3(1.0)) > 0.4){
-		return 3u;
-	}
-
-	// Kill materials very close to white.
-	// There are white pixels like this in gold and some particles
-	// TODO: This removes the white from material conversion effects.
-	if(color.a == 0.0 && dot(normalize(color.rgb), normalize(vec3(1.0))) > 0.99){
-		return 3u;
-	}
-
-	// This appears to be a unique alpha value for embers, which renders extremely red.
-	// TODO: Use this to set a stable ember color instead of killing particle
-	if(color.a == 63.0/255.0){
-		return 3u;
-	}
-
-
-	// Colors that will crush to zero
-	if(max(max(color_u.r, color_u.g), color_u.b) < 4u){
-		return 3u;
-	}
-
-	// Remove dark fire particles
-
-	// The "base" fire colors. There may be more.
-	if(color_u.rgb == uvec3(7, 3, 3) || color_u.rgb == uvec3(7, 3, 1)){
-		return 3u;
-	}
-	// Fire particles
-	if(color.a > 0.0 && color.a < 1.0) {
-		// Only keep colors above a certain brightness threshold
-		if(luminance(color.rgb) < 0.05) {
-			return 3u;
-		} else {
-			return 2u;
+float downsampleEmitters(ivec2 st){
+	for(int y = st.y * 4; y < st.y * 4 + 4; y++){
+		for(int x = st.x * 4; x < st.x * 4 + 4; x++){
+			if(getMaterialType(texelFetch(tex_glow_source, ivec2(x, y), 0)) == 2u){
+				return 1.0;
+			}
 		}
 	}
 
-	// Air / Gas
-	if(color.rgb == vec3(0.0)){
-		return 3u;
-	};
-
-	// Emissive
-	if((color_u.r & 64u) == 0u){
-		return 2u;
-	}
-
-	// No material identified, default to air
-	return 3u;
+	return 0.0;
 }
 
 bool expand_emissive_pixels_r2(in ivec2 st){
@@ -318,6 +82,7 @@ bool expand_emissive_pixels_r4(in ivec2 st){
 
 	return false;
 }
+
 
 uint getMaterial(ivec2 st) {
 	uint mat_here = getMaterialType(texelFetch(tex_glow_source, st, 0));
@@ -354,31 +119,6 @@ uint getMaterial(ivec2 st) {
 
 	return mat_here;
 }
-
-float downsampleEmitters(ivec2 st){
-	for(int y = st.y * 4; y < st.y * 4 + 4; y++){
-		for(int x = st.x * 4; x < st.x * 4 + 4; x++){
-			if(getMaterialType(texelFetch(tex_glow_source, ivec2(x, y), 0)) == 2u){
-				return 1.0;
-			}
-		}
-	}
-
-	return 0.0;
-}
-
-// TODO: Separate sampler functions for each vbuffer. No need to move around
-// data we don't need to.
-// Interpolating sampler, excluding edges
-vec3 sampleVbufferUV(VBuffer vbuffer, vec2 uv) {
-	// uv = clamp(uv * 0.25, 1.0 / 431.0, 0.25 - 1.0 / 242.0);
-	return texture2D(tex_glow_prev_frame, uv).rgb;
-}
-
-
-// ============================================================================
-
-// outColor.rgb = texelFetch(tex_glow_source_particles, ivec2(uv * textureSize(tex_glow_source_particles, 0)), 0).rgb;
 
 uvec3 sample_glow_source_st(ivec2 st){
 	vec4 s = texelFetch(tex_glow_source, st, 0);
@@ -484,165 +224,7 @@ uvec3 sample_glow_source_st_average(ivec2 st){
 	return sample_glow_source_color_st_average_r8(st);
 }
 
-struct SDFSample {
-	float dist;
-	uint material;
-};
-
-SDFSample sample_sdf(vec2 pos) {
-    vec3 s_texel = vec3(0.0);
-	if(pos.y > 121.0){
-		s_texel = texelFetch(tex_glow_prev_frame, ivec2(pos), 0).rgb;
-	} else {
-		s_texel = texelFetch(tex_glow_prev_frame, ivec2(pos) + ivec2(0, 120), 0).rgb;
-	}
-
-    float dist;
-    int material = 15;
-
-    if(pos.y > 121.0){
-        material = int(s_texel.b * 255.0) & 0xF;
-        dist = s_texel.g;
-    } else {
-        material = int(s_texel.b * 255.0) >> 4;
-        dist = s_texel.r;
-    }
-
-    return SDFSample(dist, material);
-}
-
-// SDFSample sample_quarter_sdf_texel(ivec2 st) {
-// 	ivec2 sample_st = ivec2(st) + ivec2(VBUF1.pos);
-// 	vec3 texel = texelFetch(tex_glow_prev_frame, sample_st, 0).rgb;
-
-// 	float dist = texel.r;
-// 	uint material = uint(texel.b * 255.0);
-
-// 	return SDFSample(dist, material);
-// }
-
-ivec2 global_st_to_vbuffer_st(ivec2 st, VBuffer vbuffer) {
-	return st - ivec2(vbuffer.pos);
-}
-
-vec2 global_st_to_vbuffer_space_uv(ivec2 st, VBuffer vbuffer) {
-	return vec2(st - vbuffer.pos) / vbuffer.bounds;
-}
-
-vec2 global_st_to_hdr_vbuffer_space_uv(ivec2 st, VBuffer vbuffer) {
-    vec2 offset = vec2(st) - vbuffer.pos;
-    offset /= vbuffer.bounds;
-	return offset;
-}
-
-ivec2 uv_to_vbuffer_st(vec2 uv, VBuffer vbuffer) {
-	return ivec2(vbuffer.pos + uv * vbuffer.bounds);
-}
-
-// const float BRIGHTNESS_MULTIPLIER = 1.0;
-// 
-// float exposureCurve(float b, float Emin, float Emax, float k){
-// 	b = clamp(b, 0.0, 1.0);
-// 	float num = log(1.0 + k * (1.0 - b));
-// 	float den = log(1.0 + k);
-// 	return mix(Emin, Emax, num / den);
-// }
-// 
-// float exposureHDR(float L, float Emin, float Emax, float Lref, float Lhalf){
-// 	L = max(L, 0.0);
-// 	float safeRef = max(Lref, 1e-4);
-// 	float safeHalf = max(Lhalf, 1e-4);
-// 	float alpha = log(2.0) / log(1.0 + safeHalf / safeRef);
-// 	float t = pow(1.0 + L / safeRef, -alpha);
-// 	return mix(Emin, Emax, t);
-// }
-// 
-// // Logistic/Hill alternative: center at Lmid with adjustable steepness
-// float exposureHill(float L, float Emin, float Emax, float Lmid, float gamma){
-// 	L = max(L, 0.0);
-// 	float safeMid = max(Lmid, 1e-4);
-// 	float t = 1.0 / (1.0 + pow(L / safeMid, gamma));
-// 	return mix(Emin, Emax, t);
-// }
-// 
-// float calculateSmoothedExposure(float currentExposure, float targetExposure){
-// 	float mixed = mix(currentExposure, targetExposure, EXPOSURE_BLEND);
-//         return clamp(mixed, MIN_EXPOSURE, MAX_EXPOSURE);
-// }
-// 
-// float calculateLuminance(){
-// 	float totalLogSum = 0.0;
-// 
-// 	for(int y = 0; y < 121; y++){
-// 		float data = unpackSnorm24(texelFetch(tex_glow_prev_frame, ivec2(430, y), 0).rgb);
-// 		totalLogSum += data;
-// 	}
-// 
-// 	float avgLogLuminance = totalLogSum / 121.0;
-// 	float geometricMeanLuminance = exp(avgLogLuminance) - 1.0;
-// 	return min(geometricMeanLuminance, 1.0);
-// }
-
-// uint calculateTrueExposure(ivec2 st){
-// 	return calculateExposure(calculateLuminance(st));
-// }
-
-bool within(VBuffer vbuffer) {
-	return st.x >= vbuffer.pos.x &&
-		   st.x <= vbuffer.bounds.x + vbuffer.pos.x &&
-		   st.y >= vbuffer.pos.y &&
-		   st.y <= vbuffer.bounds.y + vbuffer.pos.y;
-}
-
-vec3 copyBuffer(VBuffer vbuffer) {
-	ivec2 index = st % ivec2(vbuffer.bounds);
-	return texelFetch(tex_glow_prev_frame, ivec2(vbuffer.pos) + index, 0).rgb;
-}
-
-vec3 sample_hdr_buffer_texel(VBuffer vbuffer, ivec2 iv) {
-	// Don't sample outside buffer
-	iv = clamp(iv, ivec2(vbuffer.pos), ivec2(vbuffer.pos + vbuffer.bounds));
-
-	vec3 high_sample = texelFetch(tex_glow_prev_frame, iv + ivec2(0, 0), 0).rgb;
-	vec3 low_sample  = texelFetch(tex_glow_prev_frame, iv + ivec2(1, 0), 0).rgb;
-
-	uvec3 high_bits = uvec3(high_sample * 255.0) << 8;
-	uvec3 low_bits = uvec3(low_sample * 255.0);
-	vec3 hdr_color = vec3(high_bits | low_bits) / 255.0;
-	return hdr_color;
-}
-
-vec3 sample_hdr_buffer_uninterpolated(VBuffer vbuffer, vec2 uv) {
-	uv *= vec2(0.5, 1.0);
-	ivec2 hdr_iv = ivec2(uv * vbuffer.bounds);
-	hdr_iv *= ivec2(2, 1);
-	hdr_iv += ivec2(vbuffer.pos);
-
-	vec3 hdr_color = sample_hdr_buffer_texel(vbuffer, hdr_iv);
-
-	return hdr_color;
-}
-
-vec3 sample_hdr_buffer(VBuffer vbuffer, vec2 uv) {
-	uv *= vec2(0.5, 1.0);
-	ivec2 hdr_iv = ivec2(uv * vbuffer.bounds);
-	hdr_iv *= ivec2(2, 1);
-	hdr_iv += ivec2(vbuffer.pos);
-
-	vec3 hdr_color_ul = sample_hdr_buffer_texel(vbuffer, hdr_iv + ivec2(0, 0));
-	vec3 hdr_color_ur = sample_hdr_buffer_texel(vbuffer, hdr_iv + ivec2(2, 0));
-	vec3 hdr_color_ll = sample_hdr_buffer_texel(vbuffer, hdr_iv + ivec2(0, 1));
-	vec3 hdr_color_lr = sample_hdr_buffer_texel(vbuffer, hdr_iv + ivec2(2, 1));
-
-    // lerp
-	vec2 f = fract(uv * vbuffer.bounds);
-	vec3 hdr_color_top = mix(hdr_color_ul, hdr_color_ur, f.x);
-	vec3 hdr_color_bottom = mix(hdr_color_ll, hdr_color_lr, f.x);
-	vec3 hdr_color = mix(hdr_color_top, hdr_color_bottom, f.y);
-
-	return hdr_color;
-}
-
+// TODO: Use Lygia imported version
 vec3 smartDeNoise(vec2 uv, vec2 pixel, float sigma, float kSigma, float threshold) {
     float radius = floor(kSigma*sigma + 0.5);
     float radQ = radius * radius;
@@ -680,121 +262,6 @@ vec3 smartDeNoise(vec2 uv, vec2 pixel, float sigma, float kSigma, float threshol
     return aBuff/zBuff;
 }
 
-
-SDFSample sample_sdf_texel(ivec2 st) {
-	ivec2 offset = ivec2(0);
-	if(st.y < 121){
-		offset = ivec2(0, 121);
-	}
-	ivec2 sample_st = ivec2(st) + offset;
-	vec3 texel = texelFetch(tex_glow_prev_frame, sample_st, 0).rgb;
-
-	float dist = 0.0;
-	uint material = 0u;
-	if(st.y < 121){
-		dist = texel.r;
-		material = (uint(texel.b * 255.0) >> 6) & 0x3u;
-	} else {
-		dist = texel.g;
-		material = (uint(texel.b * 255.0) >> 4) & 0x3u;
-	}
-
-	return SDFSample(dist, material);
-}
-
-// Finds the distance to the nearest material in the vertical direction
-float distanceFieldPassVertical(ivec2 st){
-	SDFSample centerSample = sample_sdf_texel(st);
-	int centerDist = int(centerSample.dist * 255.0);
-	uint centerMaterial = centerSample.material;
-	int minDistSqr = centerDist * centerDist;
-
-	// Down walk
-	int max_y = min(int(GLOW_BOUNDS.y), st.y + centerDist);
-
-	for(int y = st.y + 1; y <= max_y; y++) {
-		SDFSample sdfSample = sample_sdf_texel(ivec2(st.x, y));
-		int y_dist = y - st.y;
-
-		if (centerMaterial != sdfSample.material) {
-			minDistSqr = min(minDistSqr, y_dist * y_dist);
-			break;
-		}
-
-		int x_dist = int(sdfSample.dist * 255.0);
-		int dSqr = y_dist * y_dist + x_dist * x_dist;
-		// Early exit implicitally handled by max_y
-		minDistSqr = min(minDistSqr, dSqr);
-	}
-
-	// Up walk
-	int min_y = max(0, st.y - minDistSqr);
-
-	for(int y = st.y - 1; y >= min_y; y--) {
-		SDFSample sdfSample = sample_sdf_texel(ivec2(st.x, y));
-		int y_dist = y - st.y;
-
-		if (centerMaterial != sdfSample.material) {
-			minDistSqr = min(minDistSqr, y_dist * y_dist);
-			break;
-		}
-
-		int x_dist = int(sdfSample.dist * 255.0);
-		int dSqr = y_dist * y_dist + x_dist * x_dist;
-		minDistSqr = min(minDistSqr, dSqr);
-	}
-
-	float dist = sqrt(float(minDistSqr));
-
-	return dist / 255.0;
-}
-
-float emitterDistanceFieldPassVertical(ivec2 st){
-	vec3 centerSample = texelFetch(tex_glow_prev_frame, st, 0).rgb;
-	int centerDist = int(centerSample.g * 255.0);
-	int minDistSqr = centerDist * centerDist;
-
-	// Down walk
-	int max_y = min(59, st.y + centerDist);
-
-	for(int y = st.y + 1; y <= max_y; y++) {
-		vec3 sdfSample = texelFetch(tex_glow_prev_frame, ivec2(st.x, y), 0).rgb;
-		int y_dist = y - st.y;
-
-		if (centerSample.r != sdfSample.r) {
-			minDistSqr = min(minDistSqr, y_dist * y_dist);
-			break;
-		}
-
-		int x_dist = int(sdfSample.g * 255.0);
-		int dSqr = y_dist * y_dist + x_dist * x_dist;
-		// Early exit implicitally handled by max_y
-		minDistSqr = min(minDistSqr, dSqr);
-	}
-
-	// Up walk
-	int min_y = max(0, st.y - minDistSqr);
-
-	for(int y = st.y - 1; y >= min_y; y--) {
-		vec3 sdfSample = texelFetch(tex_glow_prev_frame, ivec2(st.x, y), 0).rgb;
-		int y_dist = y - st.y;
-
-		if (centerSample.r != sdfSample.r) {
-			minDistSqr = min(minDistSqr, y_dist * y_dist);
-			break;
-		}
-
-		int x_dist = int(sdfSample.g * 255.0);
-		int dSqr = y_dist * y_dist + x_dist * x_dist;
-		minDistSqr = min(minDistSqr, dSqr);
-	}
-
-	float dist = sqrt(float(minDistSqr));
-
-	return dist / 255.0;
-}
-
-
 // Color data is only 4 bits per channel, so we store 2 colors per pixel
 vec3 store_color(ivec2 vbuf_st){
 	// Here we are doing a 2x downscale, while also cutting off the top and bottom rows.
@@ -821,15 +288,6 @@ vec3 store_color(ivec2 vbuf_st){
 
     return vec3(pack) / 255.0;
 }
-
-vec2 vbuffer_st_to_vbuffer_uv(ivec2 st, VBuffer vbuffer) {
-    return vec2(st) / vbuffer.bounds;
-}
-
-float sample_emitter_sdf(vec2 uv) {
-	return texelFetch(tex_glow_prev_frame, ivec2(uv * vec2(107, 59)) + ivec2(215, 0), 0).b;
-}
-
 
 // TODO: Optimisation
 // Ensure each vbuffer that needs to do heavy texture lookups start at an even offset to ensure they land in the same quad group.
@@ -868,7 +326,7 @@ void main(){
 		uint materialLower = getMaterial(sdf_st + ivec2(0, GLOW_BOUNDS.y / 2.0));
 		uint currentMaterials = materialUpper << 2 | materialLower;
 
-		vec3 previousFrame = texelFetch(tex_glow_prev_frame, st, 0).rgb;
+		vec3 previousFrame = texelFetch(BUFFER, st, 0).rgb;
 		uint previousMaterials = uint(previousFrame.b * 255.0) >> 4 & 0xF;
 		uint combinedMaterials = currentMaterials << 4 | previousMaterials;
 
@@ -894,7 +352,7 @@ void main(){
 		float downsampled_emitter = downsampleEmitters(sdf_st);
 		float dist = emitterDistanceFieldPassVertical(st);
 
-		vec3 prev_frame = texelFetch(tex_glow_prev_frame, st, 0).rgb;
+		vec3 prev_frame = texelFetch(BUFFER, st, 0).rgb;
 
 		outColor.rgb = vec3(
 			downsampled_emitter,
@@ -981,6 +439,6 @@ void main(){
         outColor.rgb = glow;
 
 		// Skip denoising
-		// outColor.rgb = texelFetch(tex_glow_prev_frame, st, 0).rgb;
+		// outColor.rgb = texelFetch(BUFFER, st, 0).rgb;
     }
 }
