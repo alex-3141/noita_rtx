@@ -251,20 +251,6 @@ vec3 sample_hdr_buffer_uninterpolated(VBuffer vbuffer, vec2 uv) {
 	return hdr_color;
 }
 
-vec2 getGlowCoordUV(vec2 uv) {
-	vec2 iv = uv * vec2(431.0, 242.0);
-	// iv += vec2(2, 0);
-	return iv;
-}
-
-vec3 sample_sdf_texel(vec2 iv) {
-	if(iv.y > 121.0){
-		return texelFetch(tex_glow, ivec2(iv), 0).rgb;
-	} else {
-		return texelFetch(tex_glow, ivec2(iv) + ivec2(0, 120), 0).rgb;
-	}
-}
-
 float materialOcclusionFactor(uint material){
 	if(material == 0u){
 		return 0.89; // Opaque
@@ -279,32 +265,25 @@ float materialOcclusionFactor(uint material){
 	return 1.0; // Gas
 }
 
-// TODO: These need to be matched with the values used in other shaders and lua
 #define K_CLEAR 0.002
-#define K_OCCLUDER 0.02
 
-vec3 cast_ray_point(vec2 target, vec3 target_color){
-	vec2 pos = getGlowCoordUV(tex_coord_glow_);
-	target = getGlowCoordUV(target);
-
-	target = clamp(target, vec2(1.0), GLOW_BOUNDS);
+vec3 cast_ray_point(in vec2 pos, in vec2 target, in vec3 target_color){
+	target = clamp(target, vec2(0.0), GLOW_BOUNDS);
 	vec2 dir = normalize(target - pos);
-	float dist =  distance(tex_coord_glow_ * GLOW_BOUNDS, target);
+	float dist =  distance(pos * GLOW_BOUNDS, target);
 	float distToTarget = distance(pos, target);
 
 	float dt = 0.0;
-	float inside_dist = 0.0;
-
-	int DEBUG_maxSteps = 0;
 	float rayIntensity = 1.0;
-	const int STEPS = 32;
+
+	const int STEPS = 48;
 	bool target_reached = false;
 
 	for(int j = 0; j < STEPS; j++){
 		vec2 next_pos = pos + dir * dt;
 
 		// Sample SDF and material info
-		SDFSample sdfSample = sample_sdf_texel(ivec2(next_pos) & ~0);
+		SDFSample sdfSample = sample_sdf_texel(ivec2(next_pos));
 		float d = sdfSample.dist * 255.0;
 
 		float occlusionFactor = materialOcclusionFactor(sdfSample.material);
@@ -514,11 +493,17 @@ Light getLightLow(in uint index) {
 vec3 getPointLightSources(in vec2 uv){
 	vec3 accumulated_light = vec3(0.0);
 	uint light_count = uint(RL_data.z);
+	vec2 subpixel_offset = fract(camera_pos.xy) / GLOW_BOUNDS;
+
+	// Convert into SDF space
+	vec2 pos = (vec2(uv.x, 1.0 - uv.y) + subpixel_offset) * GLOW_BOUNDS;
 
 	for(uint i = 0u; i < light_count; i++) {
 		Light light = getLightHigh(i);
+		light.pos += subpixel_offset;
+		light.pos *= GLOW_BOUNDS;
 
-		vec3 point_light = cast_ray_point(light.pos, light.color);
+		vec3 point_light = cast_ray_point(pos, light.pos, light.color);
 
 		// Depth hinting
 

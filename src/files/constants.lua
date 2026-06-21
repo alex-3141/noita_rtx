@@ -48,7 +48,10 @@ DF_HEIGHT = math.floor(frame_height + border_size * 2)
 GAMMA = 2.2
 INV_GAMMA = 1.0 / GAMMA
 
-LIGHT_JOIN_DISTANCE = 16
+-- The lights in Hiisi base are merged if this is much higher,
+-- causing flickering as light pairs pass in and out of the
+-- spatial hashing grid.
+LIGHT_JOIN_DISTANCE = 12
 
 --- Converts RGB color values from sRGB space to linear space.
 -- @param r Red component (0.0 to 1.0)
