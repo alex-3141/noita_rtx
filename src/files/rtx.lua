@@ -2,10 +2,8 @@ dofile("mods/noita_rtx/files/constants.lua")
 
 local config = dofile_once("mods/noita_rtx/config.lua")
 local materials = dofile_once("mods/noita_rtx/files/materials.lua")
-local sdf = dofile_once("mods/noita_rtx/files/sdf.lua")
 local lights = dofile_once("mods/noita_rtx/files/lights.lua")
 local texture = dofile_once("mods/noita_rtx/files/texture.lua")
-local scanner = dofile_once("mods/noita_rtx/files/scanner.lua")
 local shader = dofile_once("mods/noita_rtx/files/shader.lua")
 
 local push_uniforms = function()
