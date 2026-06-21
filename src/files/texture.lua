@@ -61,17 +61,27 @@ local push_lights = function(lights)
     end
 
     for index, light in pairs(lights) do
-        local pixel_color = 0x0
-        pixel_color = bit.bor(pixel_color, bit.band(light.r * 255, 0xFF))
-        pixel_color = bit.bor(pixel_color, bit.lshift(bit.band(light.g * 255, 0xFF), 8))
-        pixel_color = bit.bor(pixel_color, bit.lshift(bit.band(light.b * 255, 0xFF), 16))
+        -- 12 bits per value for x, y, r, g, b
 
-        local pixel_pos = 0x0
-        pixel_pos = bit.bor(pixel_pos, bit.band(light.x * 65535, 0xFFFF))
-        pixel_pos = bit.bor(pixel_pos, bit.lshift(bit.band(light.y * 65535, 0xFFFF), 16))
+        -- up to 255 is the limit for a single light. Allow up to 16x stacked lights
+        local r = bit.band(math.min(light.r, 16) * 255, 0xFFF)
+        local g = bit.band(math.min(light.g, 16) * 255, 0xFFF)
+        local b = bit.band(math.min(light.b, 16) * 255, 0xFFF)
+        local x = bit.band(light.x * 4095, 0xFFF)
+        local y = bit.band(light.y * 4095, 0xFFF)
 
-        ModImageSetPixel(LIGHT_TEXTURE, index - 1, 0, pixel_color)
-        ModImageSetPixel(LIGHT_TEXTURE, index - 1, 1, pixel_pos)
+        local pixel_0 = 0x0
+        pixel_0 = bit.bor(pixel_0, r)
+        pixel_0 = bit.bor(pixel_0, bit.lshift(g, 12))
+        pixel_0 = bit.bor(pixel_0, bit.lshift(b, 24))
+
+        local pixel_1 = 0x0
+        pixel_1 = bit.bor(pixel_1, bit.rshift(b, 8))
+        pixel_1 = bit.bor(pixel_1, bit.lshift(x, 4))
+        pixel_1 = bit.bor(pixel_1, bit.lshift(y, 16))
+
+        ModImageSetPixel(LIGHT_TEXTURE, index - 1, 0, pixel_0)
+        ModImageSetPixel(LIGHT_TEXTURE, index - 1, 1, pixel_1)
     end
 
     GameSetPostFxTextureParameter("RL_tex_lights", "rl_lights.png", TEXTURE_FILTERING_MODE.NEAREST, TEXTURE_WRAPPING_MODE.CLAMP, true)

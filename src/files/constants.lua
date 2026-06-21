@@ -45,9 +45,10 @@ frame_height = 242 / pixel_size
 DF_WIDTH = math.floor(frame_width + border_size * 2)
 DF_HEIGHT = math.floor(frame_height + border_size * 2)
 
+GAMMA = 2.2
+INV_GAMMA = 1.0 / GAMMA
 
-local GAMMA = 2.2
-local INV_GAMMA = 1.0 / GAMMA
+LIGHT_JOIN_DISTANCE = 16
 
 --- Converts RGB color values from sRGB space to linear space.
 -- @param r Red component (0.0 to 1.0)

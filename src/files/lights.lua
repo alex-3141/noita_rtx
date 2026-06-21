@@ -2,16 +2,6 @@ local luminosity = function(r, g, b)
     return math.sqrt(0.299 * (r * r) + 0.587 * (g * g) + 0.114 * (b * b))
 end
 
-local create_table_fn = function(size, fn)
-    local t = {}
-
-    for i = 1, size do
-        t[i] = fn(i)
-    end
-
-    return t
-end
-
 local worldToShaderPos = function(x, y)
     -- World height remains constant, width is based on height and aspect ratio
     local height = VIRTUAL_RESOLUTION_Y
@@ -141,52 +131,104 @@ end
 local get_light_sources = function()
     local camera_x, camera_y = GameGetCameraPos()
 
+    -- Light join distances in normalized screen units
+    local x_join_dist = 1 / (430 / LIGHT_JOIN_DISTANCE)
+    local y_join_dist = 1 / (242 / LIGHT_JOIN_DISTANCE)
+
     -- Get all entities in the world
     -- TOOD: can this be made more efficient?
     local allEnts = EntityGetInRadius(camera_x, camera_y, 250)
 
+    local joined_lights = {}
     local lights = {}
+    local count = 0
 
     for _, ent in ipairs(allEnts) do
-        LightComponents = EntityGetComponent(ent, "LightComponent")
+        local LightComponents = EntityGetComponent(ent, "LightComponent")
         if LightComponents ~= nil then
             for _, comp in ipairs(LightComponents) do
+                count = count + 1
                 local isEnabled = ComponentGetIsEnabled(comp)
-                if comp ~= nil and isEnabled then
-                    local light_x, light_y = EntityGetTransform(ent)
-                    -- TODO: Test how entity rotation effects this
-                    light_x = light_x + ComponentGetValue2(comp, 'offset_x')
-                    light_y = light_y + ComponentGetValue2(comp, 'offset_y')
-                    local x, y = worldToShaderPos(light_x, light_y)
-                    if x > 0 and x <= 1 and y > 0 and y <= 1 then
-
-                        local r = ComponentGetValue2(comp, 'r') / 255
-                        local g = ComponentGetValue2(comp, 'g') / 255
-                        local b = ComponentGetValue2(comp, 'b') / 255
-
-                        local base_luminosity = luminosity_srgb(r, g, b)
-                        local radius = ComponentGetValue2(comp, 'radius')
-
-                        local luminosity = base_luminosity * radius / pixel_size
-
-                        table.insert(lights, { r = r, g = g, b = b, x = x, y = y, luminosity = luminosity})
-                    end
+                if comp == nil or not isEnabled then
+                    goto continue
                 end
+
+                local light_x, light_y = EntityGetTransform(ent)
+                -- TODO: Test how entity rotation effects this
+                light_x = light_x + ComponentGetValue2(comp, 'offset_x')
+                light_y = light_y + ComponentGetValue2(comp, 'offset_y')
+                local x, y = worldToShaderPos(light_x, light_y)
+
+                if x < 0 or y < 0 or x > 1 or y > 1 then
+                    goto continue
+                end
+
+                -- srgb to rgb
+                local r = math.pow(ComponentGetValue2(comp, 'r') / 255, GAMMA)
+                local g = math.pow(ComponentGetValue2(comp, 'g') / 255, GAMMA)
+                local b = math.pow(ComponentGetValue2(comp, 'b') / 255, GAMMA)
+
+                local radius = ComponentGetValue2(comp, 'radius')
+                local max_radius = 300
+                local radius_norm = math.min(radius, max_radius) / max_radius
+
+                r = r * radius_norm
+                g = g * radius_norm
+                b = b * radius_norm
+
+                local luma_new = luminosity(r, g, b)
+
+                if luma_new < 0.01 then
+                    goto continue
+                end
+
+                local hash = math.floor(y / y_join_dist) * 10000 + math.floor(x / x_join_dist)
+
+                if joined_lights[hash] == nil then
+                    joined_lights[hash] = { r = r, g = g, b = b, x = x, y = y }
+                else
+                    -- Combine lights that are within the join distance
+                    local current = joined_lights[hash]
+                    local luma_current = luminosity(current.r, current.g, current.b)
+
+                    joined_lights[hash].x = (current.x * luma_current + x * luma_new) / (luma_current + luma_new)
+                    joined_lights[hash].y = (current.y * luma_current + y * luma_new) / (luma_current + luma_new)
+                    joined_lights[hash].r = joined_lights[hash].r + r
+                    joined_lights[hash].g = joined_lights[hash].g + g
+                    joined_lights[hash].b = joined_lights[hash].b + b
+                end
+
+                ::continue::
             end
         end
+    end
+
+    for _, light in pairs(joined_lights) do
+        table.insert(lights, light)
     end
 
     return lights
 end
 
+local create_cells_table = function(size)
+    local t = {}
+
+    for i = 1, size do
+        t[i] = {0, 0}
+    end
+
+    return t
+end
+
 local generate = function(distance_field)
 
     local lights = get_light_sources()
+
     -- 1. Create a grid of cells for the light lists to be stored in
     -- 2. For each light, calculate the max distance the light has influence over
     -- 3. Go over each cell in that light's radius and perform ray marching to determine if any of the pixels in that cell are lit by the light. If so, add the light to that cell's list
 
-    local cells = create_table_fn(CELL_GRID_HEIGHT * CELL_GRID_WIDTH, function() return {0, 0} end)
+    local cells = create_cells_table(CELL_GRID_HEIGHT * CELL_GRID_WIDTH)
 
     -- Ground truth - all cells reference all lights
 

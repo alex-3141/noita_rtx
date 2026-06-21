@@ -280,7 +280,7 @@ float materialOcclusionFactor(uint material){
 }
 
 // TODO: These need to be matched with the values used in other shaders and lua
-#define K_CLEAR 0.001
+#define K_CLEAR 0.002
 #define K_OCCLUDER 0.02
 
 vec3 cast_ray_point(vec2 target, vec3 target_color){
@@ -477,15 +477,17 @@ struct Light {
 };
 
 Light getLightHigh(in uint index) {
-	vec3 color = texelFetch(RL_tex_lights, ivec2(index, 0), 0).rgb;
+	uvec4 texel_0 = uvec4(texelFetch(RL_tex_lights, ivec2(index, 0), 0) * 255.0);
+	uvec4 texel_1 = uvec4(texelFetch(RL_tex_lights, ivec2(index, 1), 0) * 255.0);
 
-	uvec4 pos_texel = uvec4(texelFetch(RL_tex_lights, ivec2(index, 1), 0) * 255.0);
-	vec2 pos = vec2(
-		float(pos_texel.r | (pos_texel.g << 8)) / 65535.0,
-		float(pos_texel.b | (pos_texel.a << 8)) / 65535.0
-	);
+	float r = float(texel_0.r | texel_0.g << 8 & 0xF00u) / 255.0;
+	float g = float(texel_0.g >> 4 | texel_0.b << 4) / 255.0;
+	float b = float(texel_0.a | texel_1.r << 8 & 0xF00u) / 255.0;
 
-	return Light (color, pos);
+	float x = float(texel_1.r >> 4 | texel_1.g << 4) / 4095.0;
+	float y = float(texel_1.b | texel_1.a << 8) / 4095.0;
+
+	return Light (vec3(r, g, b), vec2(x, y));
 }
 
 // TODO: Low precision version that uses 1 pixel
@@ -514,7 +516,7 @@ vec3 getPointLightSources(in vec2 uv){
 	for(uint i = 0u; i < light_count; i++) {
 		Light light = getLightHigh(i);
 
-		vec3 point_light = cast_ray_point(light.pos, srgb2rgb(light.color));
+		vec3 point_light = cast_ray_point(light.pos, light.color);
 
 		// Depth hinting
 
@@ -640,8 +642,8 @@ vec3 rtx_compute_light(in vec2 tex_coord, in vec2 tex_coord_glow){
 	float ambient = RTX_exposure_ambient_dust.y;
 
 	// Light multipliers. These should balance all light sources to a common standard candle at 1.0 exposure
-	const float point_mul = 3.75;
-	const float glow_mul = 0.75;
+	const float point_mul = 15.0;
+	const float glow_mul = 0.4;
 
 	point_light *= point_mul;
 	glow_light *= glow_mul;
@@ -1333,5 +1335,10 @@ void main()
 	gl_FragColor.a = 1.0;
 // INSERT_AFTER gl_FragColor.a = 1.0;
 	// gl_FragColor.rgb += texture2D(RL_tex_lights_cells, tex_coord).rgb * 8.0;
+	// gl_FragColor.rgb = rgb2srgb(getPointLightSources(tex_coord));
+	// if(int(floor(tex_coord.x * 100.0)) % 2 == 0) {
+	// if(tex_coord.x > 0.5) {
+		// gl_FragColor.rgb = light_tex_sample.rgb * 0.8;
+	// }
 // END
 }
