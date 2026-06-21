@@ -28,13 +28,9 @@ local previous_camera_pos_0 = { x = 0, y = 0 }
 local previous_camera_pos_1 = { x = 0, y = 0 }
 
 local update = function()
-    local binary_map = scanner.scan_world()
-    local distance_field = sdf.generate_signed_distance_field(binary_map)
-    local _lights, list, cells = lights.generate(distance_field)
+    local light_sources = lights.get_light_sources()
 
-    texture.push_lights(_lights)
-    texture.push_lights_list(list)
-    texture.push_lights_cells(cells)
+    texture.push_lights(light_sources)
 
     local cam_x, cam_y = GameGetCameraPos()
     cam_x = math.floor(cam_x + 0.5)
@@ -42,7 +38,7 @@ local update = function()
 
     local delta_x = cam_x - previous_camera_pos_1.x
     local delta_y = cam_y - previous_camera_pos_1.y
-    GameSetPostFxParameter("RL_data", delta_x, delta_y, 0, 0)
+    GameSetPostFxParameter("RL_data", delta_x, delta_y, #light_sources, 0)
 
     previous_camera_pos_1 = previous_camera_pos_0
     previous_camera_pos_0 = { x = cam_x, y = cam_y }

@@ -506,12 +506,7 @@ Light getLightLow(in uint index) {
 
 vec3 getPointLightSources(in vec2 uv){
 	vec3 accumulated_light = vec3(0.0);
-	ivec2 cell_coord = ivec2(uv * textureSize(RL_tex_lights_cells, 0));
-
-	vec4 texel = texelFetch(RL_tex_lights_cells, cell_coord, 0);
-
-	uint light_index = uint(texel.r * 255.0);
-	uint light_count = uint(texel.g * 255.0);
+	uint light_count = uint(RL_data.z);
 
 	for(uint i = 0u; i < light_count; i++) {
 		Light light = getLightHigh(i);
