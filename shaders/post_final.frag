@@ -298,6 +298,7 @@ vec3 cast_ray_point(vec2 target, vec3 target_color){
 	int DEBUG_maxSteps = 0;
 	float rayIntensity = 1.0;
 	const int STEPS = 32;
+	bool target_reached = false;
 
 	for(int j = 0; j < STEPS; j++){
 		vec2 next_pos = pos + dir * dt;
@@ -310,11 +311,17 @@ vec3 cast_ray_point(vec2 target, vec3 target_color){
 
 		if(dt + d > distToTarget){
 			rayIntensity *= pow(occlusionFactor, distToTarget - dt);
+			target_reached = true;
 			break;
 		} else {
 			rayIntensity *= pow(occlusionFactor, d);
 			dt += max(d, 0.5);
 		}
+	}
+
+	// Default to full occlusion if target isn't reached
+	if (!target_reached) {
+		rayIntensity = 0.0;
 	}
 
 	float geometricFalloff = 1.0 / (1.0 + K_CLEAR * distToTarget * distToTarget);
