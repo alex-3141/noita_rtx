@@ -29,14 +29,14 @@ zip: build
 	@cd $(BUILD_DIR) && zip -rq $(notdir $(ZIP_FILE)) $(notdir $(STAGE_DIR))
 	@echo "Created $(ZIP_FILE)"
 
-build: check-submodules $(LUA_TARGETS) $(LUA_LIB_TARGETS) $(SHADER_TARGETS)
+build: check-submodules check-gamedata $(LUA_TARGETS) $(LUA_LIB_TARGETS) $(SHADER_TARGETS)
 
 install-dev: check-install-dir dev
 	@mkdir -p "$(INSTALL_DIR)"
 	@cp -r "$(STAGE_DIR)/." "$(INSTALL_DIR)/"
 	@echo "Installed $(STAGE_DIR) to $(INSTALL_DIR)"
 
-dev: check-gamedata build $(DEV_SHADER_TARGETS)
+dev: build $(DEV_SHADER_TARGETS)
 	@sed -i 's/hot_reload = false/hot_reload = true/' $(STAGE_DIR)/config.lua
 
 install: build check-install-dir
