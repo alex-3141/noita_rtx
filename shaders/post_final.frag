@@ -500,19 +500,16 @@ vec3 rtx_compute_light(in vec2 tex_coord, in vec2 tex_coord_glow){
 
 	vec3 point_light = getPointLightSources(tex_coord);
 	vec2 coord_glow_compensated = tex_coord_glow + camera_compensation() / GLOW_BOUNDS;
-	// vec3 hdr_glow_unfiltered = sample_hdr_buffer(HDR_VBUF_0, coord_glow_compensated);
-	// vec3 hdr_glow_unfiltered = sample_hdr_buffer_gaussian_5x5(HDR_VBUF_0, coord_glow_compensated);
-	vec3 hdr_glow_unfiltered = sample_hdr_buffer_gaussian_3x3(HDR_VBUF_0, coord_glow_compensated);
-	vec3 hdr_glow_uninterpolated = sample_hdr_buffer_uninterpolated(HDR_VBUF_0, coord_glow_compensated); // uninterpolated
-
-	vec3 glow_light = hdr_glow_unfiltered;
-	// vec3 hdr_glow = hdr_glow_uninterpolated;
+	// vec3 glow_light = sample_hdr_buffer(HDR_VBUF_0, coord_glow_compensated);
+	vec3 glow_light = sample_hdr_buffer_gaussian_5x5(HDR_VBUF_0, coord_glow_compensated);
+	// vec3 glow_light = sample_hdr_buffer_gaussian_3x3(HDR_VBUF_0, coord_glow_compensated);
+	// vec3 glow_light = sample_hdr_buffer_uninterpolated(HDR_VBUF_0, coord_glow_compensated + 1.0 / GLOW_SIZE);
 
 	float ambient = RTX_exposure_ambient_dust.y;
 
 	// Light multipliers. These should balance all light sources to a common standard candle at 1.0 exposure
-	const float point_mul = 15.0;
-	const float glow_mul = 0.4;
+	const float point_mul = 20.0;
+	const float glow_mul = 0.5;
 
 	point_light *= point_mul;
 	glow_light *= glow_mul;

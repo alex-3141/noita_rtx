@@ -74,35 +74,30 @@ vec3 sample_emitter_color(vec2 uv) {
 	return smp;
 }
 
-#define LIGHT_BLEED
-
 vec3 castRays(vec2 uv){
-	const float rays = 128.0;
+	const float rays = 256.0;
 	const uint steps = 24u;
 
-    // TODO: Optimisation
-
-	int frame = get_frame();
-	// frame = 4;
-	float noise = getBlueNoise(frame, ivec2(uv * GLOW_BOUNDS));
-	// noise = 0.0;
+	float noise = getBlueNoise(0, ivec2(uv * GLOW_BOUNDS));
 	vec3 color = vec3(0.0);
 
-	vec2 start_pos = vec2(uv * GLOW_BOUNDS);
+	vec2 center_pos = vec2(uv * GLOW_BOUNDS);
 
-	SDFSample startSample = sample_sdf(start_pos);
+	SDFSample startSample = sample_sdf(center_pos);
 
+    // Outwards facing rays
 	for(float ray_index = 0.0; ray_index < rays; ray_index++){
 		float angle = (ray_index / rays + noise) * 6.28318530718;
 		vec2 dir = vec2(cos(angle), sin(angle));
 
 		float rayIntensity = 1.0;
 		float dt = 0.0;
-		// vec2 pos = start_pos;
-		vec2 pos = start_pos;
+        vec2 ray_start_pos = center_pos;
 
-		// vec2 pos = vec2(st) + dir * startSample.dist * 255.0;
-        pos += dir * 2.0;
+        // Cast rays away from origin to stop all the rays hitting a single pixel
+        ray_start_pos += (dir * 2.5);
+
+		vec2 pos = ray_start_pos;
 
         // Ray starting off-screen
         if(pos.x < 0.0 || pos.x > GLOW_BOUNDS.x || pos.y < 0.0 || pos.y > GLOW_BOUNDS.y){
@@ -110,17 +105,11 @@ vec3 castRays(vec2 uv){
         }
 
 		for(uint step_index = 0; step_index < steps; step_index++){
-
-			// TODO: A better way to convert coordiante spaces
 			SDFSample sdfSample = sample_sdf(pos);
-
 			float dist = sdfSample.dist * 255.0;
 
 			// Check if emissive
-            // Check that at least 1 step is taken to prevent fireflies
-			if(sdfSample.material == 2u && step_index > 1u){
-			// if(sdfSample.material == 2u){
-			// if(sdfSample.material == 2u){
+			if(sdfSample.material == 2u){
                 vec3 emitter_color = sample_emitter_color(pos / GLOW_BOUNDS);
 				vec3 color_linear = srgb2rgb(emitter_color);
 
@@ -134,15 +123,12 @@ vec3 castRays(vec2 uv){
 			rayIntensity *= pow(occlusionFactor, dist);
 
 			if(rayIntensity < 0.005){
-                // TODO: Skip rays that are masked by this pixel, eg.
-                // float half_arc_length = asin(0.5 / dist);
-                // ray_index += int(rays * half_arc_length);
 				break;
 			}
 
 			dt += max(0.707, dist);
 
-			pos = start_pos + dir * dt;
+			pos = ray_start_pos + dir * dt;
 
             // Ray off-screen
 			if(pos.x < 0.0 || pos.x > GLOW_BOUNDS.x || pos.y < 0.0 || pos.y > GLOW_BOUNDS.y){
@@ -152,12 +138,25 @@ vec3 castRays(vec2 uv){
 		}
 	}
 
-	return color / rays;
+    // Internal rays, as casting the previous rays away from the origin misses this area
+    // This reduces aliasing effects on single emissive pixels when the camera is moving
+    vec3 internal_color = vec3(0.0);
+
+    for(float y = -1.5; y < 1.5; y += 0.5){
+        for(float x = -1.5; x < 1.5; x += 0.5){
+            vec2 p = round(center_pos) + vec2(x, y);
+            if (sample_sdf(p).material == 2u) internal_color += srgb2rgb(sample_emitter_color(p / GLOW_BOUNDS));
+        }
+    }
+
+    internal_color /= 16.0;
+    internal_color = internal_color * internal_color; // Looks best by eye
+
+	return color / rays + internal_color;
 }
 
 vec3 monteCarlo(vec2 uv){
 	// Glow monte carlo
-
 	vec3 color = castRays(uv);
 
     // Expand into 16 bit range
@@ -186,22 +185,7 @@ void main()
 		ivec2 snap_st = ivec2(hdr_st.x & ~1, hdr_st.y);
 		vec2 uv = vbuffer_st_to_vbuffer_uv(snap_st, HDR_VBUF_0);
 
-        // TODO: Test how much of a performance hit doubling this up does
 		vec3 glow = monteCarlo(uv);
-
-        // TODO: adding a multiplier based on distance may help reduce fireflies and aliasing
-
-		// float dist = sample_emitter_sdf(uv);
-
-        // if(dist == 1.0/255.0) {
-        //     glow *= 0.1;
-        // }
-        // if(dist == 2.0/255.0) {
-        //     glow *= 0.5;
-        // }
-        // if(dist == 3.0/255.0) {
-        //     glow *= 0.5;
-        // }
 
 		uvec3 glow_bits = uvec3(glow * 255.0);
         if ((hdr_st.x & 1) == 0) {
@@ -215,21 +199,8 @@ void main()
         outColor.rgb = glow;
 	}
 
-
 	if (within(SDF)) {
 		ivec2 buf_st = global_st_to_vbuffer_st(st, SDF);
         outColor.rgb = build_sdf(buf_st);
 	}
-
-    if (within(EMITTER_SDF)) {
-		vec3 prev_frame = texelFetch(BUFFER, st, 0).rgb;
-
-        float dist = emitterDistanceFieldPassHorizontal(st);
-
-        outColor.rgb = vec3(
-            prev_frame.r,
-            dist,
-            prev_frame.b
-        );
-    }
 }

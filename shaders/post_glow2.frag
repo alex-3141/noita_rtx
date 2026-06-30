@@ -51,71 +51,20 @@ float downsampleEmitters(ivec2 st){
 	return 0.0;
 }
 
-bool expand_emissive_pixels_r2(in ivec2 st){
-	const int radius = 2;
-	const int xLimits[3] = int[3](2, 2, 1);
-
-	for(int y = -radius; y <= radius; y++){
-		int xLimit = xLimits[abs(y)];
-		for(int x = -xLimit; x <= xLimit; x++){
-			if(getMaterialType(texelFetch(tex_glow_source, st + ivec2(x, y), 0)) == 2u){
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
-bool expand_emissive_pixels_r4(in ivec2 st){
-	const int radius = 4;
-	const int xLimits[5] = int[5](4, 3, 3, 2, 0);
-
-	for(int y = -radius; y <= radius; y++){
-		int xLimit = xLimits[abs(y)];
-		for(int x = -xLimit; x <= xLimit; x++){
-			if(getMaterialType(texelFetch(tex_glow_source, st + ivec2(x, y), 0)) == 2u){
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
-
 uint getMaterial(ivec2 st) {
 	uint mat_here = getMaterialType(texelFetch(tex_glow_source, st, 0));
 
-	// Only expand into air
-	if(mat_here != 3u) {
-		return mat_here;
-	}
-
-	// Smear emitters over a larger areas to make them easier for rays to hit
-	const int EMITTER_GROW = 2;
-
-	for(int y = -EMITTER_GROW; y <= EMITTER_GROW; y++){
-		for(int x = -EMITTER_GROW; x <= EMITTER_GROW; x++){
-			if(x == 0 && y == 0){
-				continue;
-			}
-			if(getMaterialType(texelFetch(tex_glow_source, st + ivec2(x, y), 0)) == 2u){
-				return 2u;
-			}
-		}
-	}
-
-	// Only expand esmissive pixels into air
-	if(mat_here != 3u) {
-		return mat_here;
-	}
-
-	// Expand emissive pixels
-	if(expand_emissive_pixels_r2(st)){
-	// if(expand_emissive_pixels_r4(st)){
-		return 2u;
-	}
+	// Expand size of emitters to make them easier for rays to hit, and to reduce aliasing
+	// This needs to be adjusted in-step with the "Internal rays" part of raymarching
+	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2(-1, -1), 0)) == 2u) return 2u;
+	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2(-1,  0), 0)) == 2u) return 2u;
+	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2(-1,  1), 0)) == 2u) return 2u;
+	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2( 0, -1), 0)) == 2u) return 2u;
+	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2( 0,  0), 0)) == 2u) return 2u;
+	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2( 0,  1), 0)) == 2u) return 2u;
+	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2( 1, -1), 0)) == 2u) return 2u;
+	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2( 1,  0), 0)) == 2u) return 2u;
+	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2( 1,  1), 0)) == 2u) return 2u;
 
 	return mat_here;
 }
@@ -193,6 +142,32 @@ uvec3 sample_glow_source_color_st_average_r4(ivec2 st){
 	return sum / count;
 }
 
+uvec3 sample_glow_source_color_st_average_r6(ivec2 st){
+	const int radius = 6;
+	const int xLimits[7] = int[7](6, 6, 6, 5, 5, 4, 2);
+
+	uvec3 sum = uvec3(0u);
+	uint count = 0u;
+
+	for(int y = -radius; y <= radius; y++){
+		int xLimit = xLimits[abs(y)];
+		for(int x = -xLimit; x <= xLimit; x++){
+			uvec3 s = sample_glow_source_st(st + ivec2(x, y));
+			if(s != uvec3(0u)){
+				sum += s;
+				count++;
+			}
+		}
+	}
+
+	if(count == 0u){
+		return uvec3(0u);
+	}
+
+	return sum / count;
+}
+
+
 uvec3 sample_glow_source_color_st_average_r8(ivec2 st){
 	const int radius = 8;
 	const int xLimits[9] = int[9](8, 7, 7, 7, 6, 6, 5, 3, 0);
@@ -221,6 +196,7 @@ uvec3 sample_glow_source_color_st_average_r8(ivec2 st){
 uvec3 sample_glow_source_st_average(ivec2 st){
 	// return sample_glow_source_color_st_average_r2(st);
 	// return sample_glow_source_color_st_average_r4(st);
+	// return sample_glow_source_color_st_average_r6(st);
 	return sample_glow_source_color_st_average_r8(st);
 }
 
@@ -236,8 +212,6 @@ vec3 smartDeNoise(vec2 uv, vec2 pixel, float sigma, float kSigma, float threshol
     float invThresholdSqrt2PI = INV_SQRT_TAU / threshold;   // 1.0 / (sqrt(2*PI) * sigma)
 
     vec3 centrPx = sample_hdr_buffer(HDR_VBUF_0, uv);
-    // vec3 centrPx = sqrt(sample_hdr_buffer(HDR_VBUF_0, uv));
-	// vec3 centrPx = vec3(0.0);
 
     float zBuff = 0.0;
     vec3 aBuff = vec3(0.0);
@@ -346,86 +320,29 @@ void main(){
 		);
 	}
 
-
-	if (within(EMITTER_SDF)) {
-		ivec2 sdf_st = global_st_to_vbuffer_st(st, EMITTER_SDF);
-		float downsampled_emitter = downsampleEmitters(sdf_st);
-		float dist = emitterDistanceFieldPassVertical(st);
-
-		vec3 prev_frame = texelFetch(BUFFER, st, 0).rgb;
-
-		outColor.rgb = vec3(
-			downsampled_emitter,
-			prev_frame.g,
-			dist
-		);
-	}
-
-
 	if (within(HDR_VBUF_0)) {
-
         ivec2 hdr_st = global_st_to_vbuffer_st(st, HDR_VBUF_0);
 		ivec2 snap_st = ivec2(hdr_st.x & ~1, hdr_st.y);
 		vec2 uv = vbuffer_st_to_vbuffer_uv(snap_st, HDR_VBUF_0);
-
 		vec3 glow = sample_hdr_buffer(HDR_VBUF_0, uv);
+		uint material = sample_sdf(uv * GLOW_BOUNDS).material;
 
-		// const float sigma = 4.0;
-		// const float kSigma = 0.8;
-		// const float threshold = 2.4;
+		// === Denoising ===
 
-		// const float sigma = 4.0;
-		// const float kSigma = 1.0;
-		// const float threshold = 8.0;
+		// Nearly all of the visible noise is only present in air
+		// Denoise only in air, so that sharp shadows can be preserved on terrain
+		// if(material == 3u) {
+			// Good settings for a static image
+			// float sigma = 1.3;
+			// float kSigma = 2.7;
+			// float threshold = 0.17;
 
-		// const float sigma = 3.0;
-		// const float kSigma = 1.0;
-		// const float threshold = 8.0;
-
-		float sigma = 3.0;
-		float kSigma = 1.0;
-
-		vec2 pixel = vec2(1.0) / vec2(107.0, 60.0);
-
-		float emitter_dist = sample_emitter_sdf(uv) * 255.0;
-		float dist = sample_sdf(uv * GLOW_BOUNDS).dist;
-
-		float threshold_base = 8.0;
-
-		float threshold_emitter = threshold_base;
-		float threshold_dist = threshold_base;
-
-		// Attempt to mitigate aliasing
-		// There is likely a way to calculate ideal threshold values here, but I've just eyeballed it
-		if(emitter_dist == 1.0) {
-			threshold_emitter = 36.0;
-		}
-
-		if(emitter_dist == 2.0) {
-			threshold_emitter = 30.0;
-		}
-
-		if(emitter_dist == 3.0) {
-			threshold_emitter = 25.0;
-		}
-
-
-		float threshold = max(threshold_emitter, threshold_dist);
-
-		glow = smartDeNoise(uv, pixel, sigma, kSigma, threshold);
-
-		// if(emitter_dist == 1.0) {
-		// 	glow *= 0.25;
+			float sigma = 1.5;
+			float kSigma = 3.0;
+			float threshold = 2.0;
+			vec2 pixel = vec2(1.0) / vec2(107.0, 60.0);
+			glow = smartDeNoise(uv, pixel, sigma, kSigma, threshold);
 		// }
-
-		// if(emitter_dist == 2.0) {
-		// 	glow *= 0.5;
-		// }
-
-		// if(emitter_dist == 3.0) {
-		// 	glow *= 0.75;
-		// }
-
 
 		uvec3 glow_bits = uvec3(glow * 255.0);
         if ((hdr_st.x & 1) == 0) {
@@ -439,6 +356,8 @@ void main(){
         outColor.rgb = glow;
 
 		// Skip denoising
-		// outColor.rgb = texelFetch(BUFFER, st, 0).rgb;
+		// if((get_frame() & 64) == 64){
+			// outClor.rgb = texelFetch(BUFFER, st, 0).rgb;
+		// }
     }
 }
