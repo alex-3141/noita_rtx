@@ -556,83 +556,76 @@ vec3 rtx_tonemap(in vec3 composited){
 }
 
 vec3 rtx_debug(in vec3 color){
+	vec2 uv = vec2(tex_coord_.x, 1.0 - tex_coord_.y);
 	// ================ Buffer visualisations ================
 
 	// // Glow buffer
-	// color = texelFetch(tex_glow, ivec2((tex_coord) * GLOW_SIZE), 0).rgb;
+	// color = texelFetch(tex_glow, ivec2((uv) * GLOW_SIZE), 0).rgb;
 
 	// Source glow buffer
-	// color = texelFetch(tex_glow_unfiltered, ivec2((tex_coord) * GLOW_SIZE), 0).rgb * 4.0;
+	// color = texelFetch(tex_glow_unfiltered, ivec2((uv) * GLOW_SIZE), 0).rgb * 4.0;
 
-	// Unlit forgreound texture
-	// color = fg_srgb.rgb;
-
-	// Glow light
-	// color = glow_light;
-	// color = rgb2srgb(glow_light);
-	// color = glow_light;
-	// color = rgb2srgb(glow_light);
-
-	// Point light
-	// color = point_light;
-	// color = rgb2srgb(point_light);
-
-	// Summed light
-	// color = summed_light;
-	// color = rgb2srgb(summed_light);
-
-
+	// #define VISUAL_SDF
+	// #define VISUAL_EMITTER
+	// #define VISUAL_EMITTER_FILL
+	// #define VISUAL_MATERIAL
+	// #define VISUAL_EMITTER_COLOR
 
 	// ================ SDF Ring visualisation ================
 
-	// SDFSample sdf = sample_sdf_texel(ivec2(tex_coord * GLOW_BOUNDS));
-	// uint dist = uint(sdf.dist * 255.0);
-	// float ring = ((dist & 3) == 0) ? (1.0 - sdf.dist * 3.0) * 0.3 : 0.0;
-	// color = mix(color, vec3(0.0, 1.0, 1.0), max(0.0, ring));
-
+	#ifdef VISUAL_SDF
+	SDFSample sdf = sample_sdf_texel(ivec2(uv * GLOW_BOUNDS));
+	uint dist = uint(sdf.dist * 255.0);
+	float ring = ((dist & 3u) == 0u) ? (1.0 - sdf.dist * 3.0) * 0.3 : 0.0;
+	color = mix(color, vec3(0.0, 1.0, 1.0), max(0.0, ring));
+	#endif
 
 
 	// ================ Emissive pixel visualisation ================
-	// Emissive areas will be larger than the materials due to being expanded in glow2
-
-	// bool emitter_here = sampleMaterial(ivec2(tex_coord_glow * GLOW_BOUNDS)) == 2u;
-	// bool emitter_side = (
-	// 	sampleMaterial(ivec2(tex_coord_glow * GLOW_BOUNDS) + ivec2( 1,  1)) == 2u ||
-	// 	sampleMaterial(ivec2(tex_coord_glow * GLOW_BOUNDS) + ivec2(-1,  1)) == 2u ||
-	// 	sampleMaterial(ivec2(tex_coord_glow * GLOW_BOUNDS) + ivec2( 1, -1)) == 2u ||
-	// 	sampleMaterial(ivec2(tex_coord_glow * GLOW_BOUNDS) + ivec2(-1, -1)) == 2u
-	// );
-	// if(!emitter_here && emitter_side) {
-	// 	color = vec3(0.0, 1.0, 1.0);
-	// } else if(emitter_here) {
-	// 	color = sample_emitter_color(tex_coord_glow);
-	// }
-
-
-	// ================ Light bucket count visualisation ================
-	// vec4 num_lights = DEBUG_show_num_lights();
-	// color = mix(color, num_lights.rgb, num_lights.a);
+	#ifdef VISUAL_EMITTER
+	bool emitter_here = sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS)) == 2u;
+	#ifdef VISUAL_EMITTER_FILL
+	if(emitter_here){
+		color = vec3(0.0, 1.0, 1.0);
+	}
+	#else
+	bool emitter_side = (
+		sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS) + ivec2( 1,  1)) == 2u ||
+		sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS) + ivec2(-1,  1)) == 2u ||
+		sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS) + ivec2( 1, -1)) == 2u ||
+		sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS) + ivec2(-1, -1)) == 2u
+	);
+	if(!emitter_here && emitter_side) {
+		color = vec3(0.0, 1.0, 1.0);
+	} else if(emitter_here) {
+		color = sample_emitter_color(tex_coord_glow_);
+	}
+	#endif
+	#endif
 
 
 	// ================ Material visualisation ================
-
-	// uint mat = sampleMaterial(ivec2(tex_coord_glow * GLOW_BOUNDS));
-	// if(mat == 0u) {
-	// 	color = vec3(0.7, 0.0, 0.0);
-	// }
-	// if(mat == 1u) {
-	// 	color = vec3(0.0, 0.7, 0.0);
-	// }
-	// if(mat == 2u) {
-	// 	color = vec3(0.0, 0.0, 0.7);
-	// }
-	// if(mat == 3u) {
-	// 	color = vec3(0.7, 0.0, 0.7);
-	// }
+	#ifdef VISUAL_MATERIAL
+	uint mat = sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS));
+	if(mat == 0u) {
+		color = vec3(0.7, 0.0, 0.0);
+	}
+	if(mat == 1u) {
+		color = vec3(0.0, 0.7, 0.0);
+	}
+	if(mat == 2u) {
+		color = vec3(0.0, 0.0, 0.7);
+	}
+	if(mat == 3u) {
+		color = vec3(0.7, 0.0, 0.7);
+	}
+	#endif
 
 
 	// ============= Emitter color visualisation ==============
-	// color = sample_emitter_color(tex_coord_glow);
+	#ifdef VISUAL_EMITTER_COLOR
+	color = sample_emitter_color(uv);
+	#endif
 
 	return color;
 }
@@ -884,7 +877,8 @@ void main()
 
 	vec4 light_tex_sample = texture2D(tex_lights, tex_coord);
 // REPLACE 	vec3 lights = light_tex_sample.rgb * 0.8;
-	vec3 lights = rtx_compute_light(tex_coord, tex_coord_glow);
+	vec3 rtx_lights = rtx_compute_light(tex_coord, tex_coord_glow);
+	vec3 lights = rtx_lights;
 // END
 
 // ============================================================================================================
@@ -1207,7 +1201,9 @@ void main()
 	// gl_FragColor.rgb = rgb2srgb(getPointLightSources(tex_coord));
 	// if(int(floor(tex_coord.x * 100.0)) % 2 == 0) {
 	// if(tex_coord.x > 0.5) {
-		// gl_FragColor.rgb = light_tex_sample.rgb * 0.8;
+		// gl_FragColor.rgb = tonemap(rtx_lights);
+		// gl_FragColor.rgb = rtx_lights;
+		// gl_FragColor.rgb = rtx_debug(gl_FragColor.rgb);
 	// }
 // END
 }
