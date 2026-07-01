@@ -55,7 +55,7 @@ local function processMaterial(cell)
 
     local has_glow = (cell.attr.gfx_glow or "0") ~= "0"
     local is_gas = cell.attr.cell_type == "gas"
-    local is_liquid = cell.attr.cell_type == "liquid"
+    local is_liquid = cell.attr.tags and string.find(cell.attr.tags, "%[liquid%]") ~= nil
 
     if has_glow then
         -- Clamp brightnesses to 255 and thus the 0-63 range. A few materials go above 255 and will be reduced.
