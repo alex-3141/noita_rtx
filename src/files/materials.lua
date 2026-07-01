@@ -55,6 +55,7 @@ local function processMaterial(cell)
 
     local has_glow = (cell.attr.gfx_glow or "0") ~= "0"
     local is_gas = cell.attr.cell_type == "gas"
+    local is_liquid = cell.attr.cell_type == "liquid"
 
     if has_glow then
         -- Clamp brightnesses to 255 and thus the 0-63 range. A few materials go above 255 and will be reduced.
@@ -72,6 +73,10 @@ local function processMaterial(cell)
                 cell.attr.gfx_glow_color = "00000000"
             end
         end
+    elseif is_liquid then
+        -- Avoid setting glow on non-emissive liquids, as it interferes with particle glow
+        -- A liquid mask is provided by the engine in the alpha channel which is used to
+        -- ID liquids instead.
     else
         -- Occluder - Set opaque bit
         -- Note: We could include the full color or other information in the lower 6 bits.

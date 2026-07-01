@@ -263,6 +263,20 @@ vec3 store_color(ivec2 vbuf_st){
     return vec3(pack) / 255.0;
 }
 
+
+vec3 downsample_particle_glow(vec2 uv){
+	vec2 particle_uv = vec2(uv.x, 1.0 - uv.y);
+	vec3 particle_glow = vec3(0.0);
+	vec2 p = 1.0 / vec2(430.0, 242.0);
+
+	particle_glow += srgb2rgb(texture2D(tex_glow_source_particles, particle_uv + vec2(-p.x, -p.y)).rgb);
+	particle_glow += srgb2rgb(texture2D(tex_glow_source_particles, particle_uv + vec2( p.x, -p.y)).rgb);
+	particle_glow += srgb2rgb(texture2D(tex_glow_source_particles, particle_uv + vec2(-p.x,  p.y)).rgb);
+	particle_glow += srgb2rgb(texture2D(tex_glow_source_particles, particle_uv + vec2( p.x,  p.y)).rgb);
+
+	return particle_glow * 1023.0;
+}
+
 // TODO: Optimisation
 // Ensure each vbuffer that needs to do heavy texture lookups start at an even offset to ensure they land in the same quad group.
 void main(){
@@ -343,6 +357,11 @@ void main(){
 			vec2 pixel = vec2(1.0) / vec2(107.0, 60.0);
 			glow = smartDeNoise(uv, pixel, sigma, kSigma, threshold);
 		// }
+
+		// Add vanilla particle glow
+		// TODO: This is out of sync with the monte carlo glow. There should be enough free
+		// buffer space to delay this.
+		glow += downsample_particle_glow(uv);
 
 		uvec3 glow_bits = uvec3(glow * 255.0);
         if ((hdr_st.x & 1) == 0) {

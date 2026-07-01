@@ -509,7 +509,7 @@ vec3 rtx_compute_light(in vec2 tex_coord, in vec2 tex_coord_glow){
 
 	// Light multipliers. These should balance all light sources to a common standard candle at 1.0 exposure
 	const float point_mul = 20.0;
-	const float glow_mul = 0.5;
+	const float glow_mul = 0.25;
 
 	point_light *= point_mul;
 	glow_light *= glow_mul;

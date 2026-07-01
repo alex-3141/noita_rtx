@@ -5,6 +5,7 @@ local materials = dofile_once("mods/noita_rtx/files/materials.lua")
 local lights = dofile_once("mods/noita_rtx/files/lights.lua")
 local texture = dofile_once("mods/noita_rtx/files/texture.lua")
 local shader = dofile_once("mods/noita_rtx/files/shader.lua")
+local entities = dofile_once("mods/noita_rtx/files/entities.lua")
 
 local push_uniforms = function()
   local exposure = ModSettingGet("noita_rtx.exposure")
@@ -20,6 +21,7 @@ local init = function()
 
     texture.create_textures()
     materials.patch()
+    entities.patch()
 end
 
 local previous_camera_pos_0 = { x = 0, y = 0 }
