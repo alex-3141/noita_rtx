@@ -919,33 +919,49 @@ void main()
 	float dust_amount = 0.0;
 	if (ENABLE_FOG_OF_WAR)
 	{
-		vec2 FOG_TEX_SIZE = vec2( 64.0 ) * camera_inv_zoom_ratio;
+// REPLACE
+// 		vec2 FOG_TEX_SIZE = vec2( 64.0 ) * camera_inv_zoom_ratio;
+// 
+// 		vec4 fog_value = texture2D( tex_fog, tex_coord_fogofwar );
+// 
+// 		#ifdef HIQ
+// 			const float s  = 0.25;
+// 			const float s2 = 0.75;
+// 			fog_value = fog_value + (
+// 	                           + texture2D(tex_fog, tex_coord_fogofwar - vec2(-1.0,1.0) / FOG_TEX_SIZE.x * s )
+// 	                           + texture2D(tex_fog, tex_coord_fogofwar - vec2(1.0,1.0) /  FOG_TEX_SIZE.y * s )
+// 	                           + texture2D(tex_fog, tex_coord_fogofwar + vec2(-1.0,1.0) / FOG_TEX_SIZE.x * s )
+// 	                           + texture2D(tex_fog, tex_coord_fogofwar + vec2(1.0,1.0) /  FOG_TEX_SIZE.y * s )
+// 
+// 	                           + texture2D(tex_fog, tex_coord_fogofwar - vec2(1.0,0.0) /  FOG_TEX_SIZE.x * s2 )
+// 	                           + texture2D(tex_fog, tex_coord_fogofwar + vec2(1.0,0.0) /  FOG_TEX_SIZE.y * s2 )
+// 	                           + texture2D(tex_fog, tex_coord_fogofwar - vec2(0.0,1.0) /  FOG_TEX_SIZE.x * s2 )
+// 	                           + texture2D(tex_fog, tex_coord_fogofwar + vec2(0.0,1.0) /  FOG_TEX_SIZE.y * s2 ) );
+// 		    fog_value *= 0.1111111;
+// 		#else
+// 			const float s = 0.5;
+// 			fog_value = fog_value + (
+// 	                           + texture2D(tex_fog, tex_coord_fogofwar - vec2(-1.0,1.0) / FOG_TEX_SIZE.x * s )
+// 	                           + texture2D(tex_fog, tex_coord_fogofwar - vec2(1.0,1.0) /  FOG_TEX_SIZE.y * s )
+// 	                           + texture2D(tex_fog, tex_coord_fogofwar + vec2(-1.0,1.0) / FOG_TEX_SIZE.x * s )
+// 	                           + texture2D(tex_fog, tex_coord_fogofwar + vec2(1.0,1.0) /  FOG_TEX_SIZE.y * s ) );
+// 		    fog_value *= 0.2;
+// 		#endif
+// START
+		vec2 pixel = 1.0 / (vec2( 64.0 ) * camera_inv_zoom_ratio);
 
-		vec4 fog_value = texture2D( tex_fog, tex_coord_fogofwar );
-
-		#ifdef HIQ
-			const float s  = 0.25;
-			const float s2 = 0.75;
-			fog_value = fog_value + (
-	                           + texture2D(tex_fog, tex_coord_fogofwar - vec2(-1.0,1.0) / FOG_TEX_SIZE.x * s )
-	                           + texture2D(tex_fog, tex_coord_fogofwar - vec2(1.0,1.0) /  FOG_TEX_SIZE.y * s )
-	                           + texture2D(tex_fog, tex_coord_fogofwar + vec2(-1.0,1.0) / FOG_TEX_SIZE.x * s )
-	                           + texture2D(tex_fog, tex_coord_fogofwar + vec2(1.0,1.0) /  FOG_TEX_SIZE.y * s )
-
-	                           + texture2D(tex_fog, tex_coord_fogofwar - vec2(1.0,0.0) /  FOG_TEX_SIZE.x * s2 )
-	                           + texture2D(tex_fog, tex_coord_fogofwar + vec2(1.0,0.0) /  FOG_TEX_SIZE.y * s2 )
-	                           + texture2D(tex_fog, tex_coord_fogofwar - vec2(0.0,1.0) /  FOG_TEX_SIZE.x * s2 )
-	                           + texture2D(tex_fog, tex_coord_fogofwar + vec2(0.0,1.0) /  FOG_TEX_SIZE.y * s2 ) );
-		    fog_value *= 0.1111111;
-		#else
-			const float s = 0.5;
-			fog_value = fog_value + (
-	                           + texture2D(tex_fog, tex_coord_fogofwar - vec2(-1.0,1.0) / FOG_TEX_SIZE.x * s )
-	                           + texture2D(tex_fog, tex_coord_fogofwar - vec2(1.0,1.0) /  FOG_TEX_SIZE.y * s )
-	                           + texture2D(tex_fog, tex_coord_fogofwar + vec2(-1.0,1.0) / FOG_TEX_SIZE.x * s )
-	                           + texture2D(tex_fog, tex_coord_fogofwar + vec2(1.0,1.0) /  FOG_TEX_SIZE.y * s ) );
-		    fog_value *= 0.2;
-		#endif
+		// 3x3 gaussian
+		vec4 fog_value = vec4(0.0);
+		fog_value += texture2D(tex_fog, tex_coord_fogofwar + pixel * vec2(-1, -1)) * 0.0625;
+		fog_value += texture2D(tex_fog, tex_coord_fogofwar + pixel * vec2(0, -1)) * 0.125;
+		fog_value += texture2D(tex_fog, tex_coord_fogofwar + pixel * vec2(1, -1)) * 0.0625;
+		fog_value += texture2D(tex_fog, tex_coord_fogofwar + pixel * vec2(-1, 0)) * 0.125;
+		fog_value += texture2D(tex_fog, tex_coord_fogofwar + pixel * vec2(0, 0)) * 0.25;
+		fog_value += texture2D(tex_fog, tex_coord_fogofwar + pixel * vec2(1, 0)) * 0.125;
+		fog_value += texture2D(tex_fog, tex_coord_fogofwar + pixel * vec2(-1, 1)) * 0.0625;
+		fog_value += texture2D(tex_fog, tex_coord_fogofwar + pixel * vec2(0, 1)) * 0.125;
+		fog_value += texture2D(tex_fog, tex_coord_fogofwar + pixel * vec2(1, 1)) * 0.0625;
+// END
 
 		fog_of_war_amount = fog_value.r * (1.0-light_tex_sample.a); // light_tex_sample.a contains "fog of war holes" (for example temporary holes caused by explosions)
 		dust_amount = fog_value.g;
@@ -992,7 +1008,8 @@ void main()
 	// fog_of_war = pow( fog_of_war, vec3( 0.6 ) );
 	fog_of_war = min( vec3(1.0), max( dither_srgb( 2.0 * fog_of_war, noise.b, 32.0 ), fog_of_war_sky_ambient_amount ) );
 
-	lights *= fog_of_war;
+// DELETE 	lights *= fog_of_war;
+// END
 // DELETE  	lights += max(0.35 - fog_of_war_sky_ambient_amount, 0.0) * dither_srgb( fog_of_war, noise.b, 128.0 );
 // END
 
@@ -1075,6 +1092,8 @@ void main()
 	color = rtx_tonemap(color);
 	// Convert back to SRGB. The color grading after this step would be authored in SRGB space.
 	color = rgb2srgb(color);
+	// Non-diagetic effects
+	color *= fog_of_war;
 // END
 
 	color = mix(color, vec3((color.r + color.g + color.b) * 0.3333), color_grading.a);
