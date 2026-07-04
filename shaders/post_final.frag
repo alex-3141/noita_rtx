@@ -63,6 +63,7 @@ varying vec2 tex_coord_fogofwar;
 // ==================================================================================================
 
 const vec2 SCREEN_SIZE = vec2(431.0, 242.0);
+// #define DEBUG_RULER
 
 // Lygia includes
 #undef DIGITS_SIZE
@@ -425,7 +426,11 @@ vec3 rtx_debug_light_positions(in vec2 uv){
 		light.pos += subpixel_offset;
 		vec2 diff = (light.pos - uv) * vec2(SCREEN_SIZE.x / SCREEN_SIZE.y, 1.0);
 
+		#ifdef DEBUG_RULER
+		if((abs(diff.x) <= frag.x || abs(diff.y) <= frag.y)) {
+		#else
 		if(length(diff) < 0.025 && (abs(diff.x) <= frag.x || abs(diff.y) <= frag.y)) {
+		#endif
 			color += vec3(1.0, 1.0, 1.0);
 		}
 	}
