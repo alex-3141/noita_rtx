@@ -1003,7 +1003,9 @@ void main()
 	float fade = clamp( (world_pos.y - 250.0) / 100.0, 0.0, 1.0 );
 	fog_of_war_sky_ambient_amount *= 1.0-fade;
 	float sky_ambient2 = sqrt( fog_of_war_sky_ambient_amount );
-	vec3 fog_of_war = 1.4 * vec3(0.6,0.5,0.45) * vec3( max( 0.0, 1.0 - fog_of_war_amount - sky_ambient2 ) );
+// REPLACE 	vec3 fog_of_war = 1.4 * vec3(0.6,0.5,0.45) * vec3( max( 0.0, 1.0 - fog_of_war_amount - sky_ambient2 ) );
+	vec3 fog_of_war = 0.7 * vec3( max( 0.0, 1.0 - fog_of_war_amount - sky_ambient2 ) );
+// END
 	// fog_of_war = min( vec3(1.0), max( dither_srgb( 1.1 * fog_of_war, noise.b, 32.0 ), fog_of_war_sky_ambient_amount ) );
 	// fog_of_war = pow( fog_of_war, vec3( 0.6 ) );
 	fog_of_war = min( vec3(1.0), max( dither_srgb( 2.0 * fog_of_war, noise.b, 32.0 ), fog_of_war_sky_ambient_amount ) );
