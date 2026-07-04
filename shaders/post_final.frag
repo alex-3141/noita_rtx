@@ -131,7 +131,7 @@ struct SDFSample {
 SDFSample sample_sdf_texel(ivec2 iv) {
 	ivec2 offset = ivec2(0);
 	if(iv.y < 121){
-		offset = ivec2(0, 121);
+		offset = ivec2(0, 120);
 	}
 	ivec2 sample_iv = ivec2(iv) + offset;
 	vec3 texel = texelFetch(tex_glow, sample_iv, 0).rgb;
@@ -378,15 +378,26 @@ Light getLightLow(in uint index) {
 vec3 getPointLightSources(in vec2 uv){
 	vec3 accumulated_light = vec3(0.0);
 	uint light_count = uint(RL_data.z);
-	vec2 subpixel_offset = fract(camera_pos.xy) / GLOW_BOUNDS;
+	vec2 subpixel_offset = fract(camera_pos.xy) / GLOW_SIZE;
+
+	// The coordiante spaces of the world and SDF differ due to different resolutions.
+	// Some ajustments need to be made to re-align everything.
+	// TODO: See if these can be baked into earlier calculations, or applied
+	// during lightcomponent processing in Lua
+
+	const vec2 ratio = vec2(427.0 / 431.0, 1.0);
+	const vec2 offset = vec2(3.0, -1.0);
 
 	// Convert into SDF space
-	vec2 pos = (vec2(uv.x, 1.0 - uv.y) + subpixel_offset) * GLOW_BOUNDS;
+	vec2 pos = (vec2(uv.x, 1.0 - uv.y) + subpixel_offset) * GLOW_SIZE;
+	pos = (pos - vec2(0.5)) * ratio + vec2(0.5);
+	pos += offset;
 
 	for(uint i = 0u; i < light_count; i++) {
 		Light light = getLightHigh(i);
 		light.pos += subpixel_offset;
-		light.pos *= GLOW_BOUNDS;
+		light.pos = (((light.pos - vec2(0.5)) * ratio) + vec2(0.5)) * GLOW_SIZE;
+		light.pos += vec2(1.0, -1.0);
 
 		vec3 point_light = cast_ray_point(pos, light.pos, light.color);
 
