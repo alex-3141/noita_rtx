@@ -62,6 +62,8 @@ varying vec2 tex_coord_fogofwar;
 // Noita RTX ========================================================================================
 // ==================================================================================================
 
+const vec2 SCREEN_SIZE = vec2(427.0, 242.0);
+
 // Lygia includes
 #undef DIGITS_SIZE
 #define DIGITS_SIZE vec2(0.25)
@@ -409,6 +411,26 @@ vec3 getPointLightSources(in vec2 uv){
 	}
 
 	return accumulated_light;
+}
+
+vec3 rtx_debug_light_positions(in vec2 uv){
+	vec3 color = vec3(0.0);
+	uint light_count = uint(RL_data.z);
+	vec2 subpixel_offset = fract(camera_pos.xy) / SCREEN_SIZE;
+	uv += subpixel_offset;
+	vec2 frag = 1.0 / window_size;
+
+	for(uint i = 0u; i < light_count; i++) {
+		Light light = getLightHigh(i);
+		light.pos += subpixel_offset;
+		vec2 diff = (light.pos - uv) * vec2(SCREEN_SIZE.x / SCREEN_SIZE.y, 1.0);
+
+		if(length(diff) < 0.025 && (abs(diff.x) <= frag.x || abs(diff.y) <= frag.y)) {
+			color += vec3(1.0, 1.0, 1.0);
+		}
+	}
+
+	return color;
 }
 
 uint sampleMaterial(ivec2 st){
@@ -1223,5 +1245,6 @@ void main()
 		// gl_FragColor.rgb = rtx_lights;
 		// gl_FragColor.rgb = rtx_debug(gl_FragColor.rgb);
 	// }
+	// gl_FragColor.rgb += rtx_debug_light_positions(tex_coord).rgb;
 // END
 }
