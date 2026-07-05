@@ -161,9 +161,9 @@ vec2 camera_compensation() {
 	return vec2(0.0);
 }
 
-vec3 sample_hdr_buffer_texel(VBuffer vbuffer, ivec2 iv) {
+vec3 sample_hdr_buffer_texel(ivec2 iv) {
 	// Don't sample outside buffer
-	iv = clamp(iv, ivec2(vbuffer.pos) - ivec2(-2, -1), ivec2(vbuffer.pos + vbuffer.size - ivec2(3, 1)));
+	iv = clamp(iv, ivec2(HDR_VBUF_0.pos) - ivec2(-2, -1), ivec2(HDR_VBUF_0.pos + HDR_VBUF_0.size - ivec2(3, 1)));
 
 	vec3 high_sample = texelFetch(tex_glow, iv + ivec2(0, 0), 0).rgb;
 	vec3 low_sample  = texelFetch(tex_glow, iv + ivec2(1, 0), 0).rgb;
@@ -174,19 +174,19 @@ vec3 sample_hdr_buffer_texel(VBuffer vbuffer, ivec2 iv) {
 	return hdr_color;
 }
 
-vec3 sample_hdr_buffer(VBuffer vbuffer, vec2 uv) {
+vec3 sample_hdr_buffer(vec2 uv) {
 	vec2 hdr_uv = uv * vec2(0.5, 1.0);
-	ivec2 hdr_iv = ivec2(hdr_uv * vbuffer.size);
+	ivec2 hdr_iv = ivec2(hdr_uv * HDR_VBUF_0.size);
 	hdr_iv *= ivec2(2, 1);
-	hdr_iv += ivec2(vbuffer.pos);
+	hdr_iv += ivec2(HDR_VBUF_0.pos);
 
-	vec3 hdr_color_ul = sample_hdr_buffer_texel(vbuffer, hdr_iv + ivec2(0, 0));
-	vec3 hdr_color_ur = sample_hdr_buffer_texel(vbuffer, hdr_iv + ivec2(2, 0));
-	vec3 hdr_color_ll = sample_hdr_buffer_texel(vbuffer, hdr_iv + ivec2(0, 1));
-	vec3 hdr_color_lr = sample_hdr_buffer_texel(vbuffer, hdr_iv + ivec2(2, 1));
+	vec3 hdr_color_ul = sample_hdr_buffer_texel(hdr_iv + ivec2(0, 0));
+	vec3 hdr_color_ur = sample_hdr_buffer_texel(hdr_iv + ivec2(2, 0));
+	vec3 hdr_color_ll = sample_hdr_buffer_texel(hdr_iv + ivec2(0, 1));
+	vec3 hdr_color_lr = sample_hdr_buffer_texel(hdr_iv + ivec2(2, 1));
 
     // lerp
-	vec2 f = fract(hdr_uv * vbuffer.size);
+	vec2 f = fract(hdr_uv * HDR_VBUF_0.size);
 	vec3 hdr_color_top = mix(hdr_color_ul, hdr_color_ur, f.x);
 	vec3 hdr_color_bottom = mix(hdr_color_ll, hdr_color_lr, f.x);
 	vec3 hdr_color = mix(hdr_color_top, hdr_color_bottom, f.y);
@@ -196,62 +196,62 @@ vec3 sample_hdr_buffer(VBuffer vbuffer, vec2 uv) {
 	return hdr_color;
 }
 
-vec3 sample_hdr_buffer_gaussian_3x3(VBuffer vbuffer, vec2 uv) {
-	vec2 pixel = 1.0 / (vbuffer.size * vec2(1.0, 2.0));
+vec3 sample_hdr_buffer_gaussian_3x3(vec2 uv) {
+	vec2 pixel = 1.0 / (HDR_VBUF_0.size * vec2(1.0, 2.0));
 
 	vec3 hdr_color = vec3(0.0);
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(-1, -1)) * 0.0625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(0, -1)) * 0.125;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(1, -1)) * 0.0625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(-1, 0)) * 0.125;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(0, 0)) * 0.25;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(1, 0)) * 0.125;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(-1, 1)) * 0.0625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(0, 1)) * 0.125;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(1, 1)) * 0.0625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, -1)) * 0.0625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, -1)) * 0.125;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, -1)) * 0.0625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, 0)) * 0.125;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, 0)) * 0.25;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, 0)) * 0.125;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, 1)) * 0.0625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, 1)) * 0.125;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, 1)) * 0.0625;
 
 	return hdr_color;
 }
 
-vec3 sample_hdr_buffer_gaussian_5x5(VBuffer vbuffer, vec2 uv) {
-	vec2 pixel = 1.0 / (vbuffer.size * vec2(1.0, 2.0));
+vec3 sample_hdr_buffer_gaussian_5x5(vec2 uv) {
+	vec2 pixel = 1.0 / (HDR_VBUF_0.size * vec2(1.0, 2.0));
 
 	vec3 hdr_color = vec3(0.0);
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(-2, -2)) * 0.00390625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(-1, -2)) * 0.015625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(0, -2)) * 0.0234375;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(1, -2)) * 0.015625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(2, -2)) * 0.00390625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(-2, -1)) * 0.015625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(-1, -1)) * 0.0625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(0, -1)) * 0.09375;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(1, -1)) * 0.0625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(2, -1)) * 0.015625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(-2, 0)) * 0.0234375;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(-1, 0)) * 0.09375;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(0, 0)) * 0.140625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(1, 0)) * 0.09375;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(2, 0)) * 0.0234375;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(-2, 1)) * 0.015625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(-1, 1)) * 0.0625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(0, 1)) * 0.09375;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(1, 1)) * 0.0625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(2, 1)) * 0.015625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(-2, 2)) * 0.00390625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(-1, 2)) * 0.015625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(0, 2)) * 0.0234375;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(1, 2)) * 0.015625;
-	hdr_color += sample_hdr_buffer(vbuffer, uv + pixel * vec2(2, 2)) * 0.00390625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-2, -2)) * 0.00390625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, -2)) * 0.015625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, -2)) * 0.0234375;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, -2)) * 0.015625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(2, -2)) * 0.00390625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-2, -1)) * 0.015625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, -1)) * 0.0625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, -1)) * 0.09375;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, -1)) * 0.0625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(2, -1)) * 0.015625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-2, 0)) * 0.0234375;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, 0)) * 0.09375;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, 0)) * 0.140625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, 0)) * 0.09375;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(2, 0)) * 0.0234375;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-2, 1)) * 0.015625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, 1)) * 0.0625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, 1)) * 0.09375;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, 1)) * 0.0625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(2, 1)) * 0.015625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-2, 2)) * 0.00390625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, 2)) * 0.015625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, 2)) * 0.0234375;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, 2)) * 0.015625;
+	hdr_color += sample_hdr_buffer(uv + pixel * vec2(2, 2)) * 0.00390625;
 
 	return hdr_color;
 }
 
-vec3 sample_hdr_buffer_uninterpolated(VBuffer vbuffer, vec2 uv) {
+vec3 sample_hdr_buffer_uninterpolated(vec2 uv) {
 	uv *= vec2(0.5, 1.0);
-	ivec2 hdr_iv = ivec2(uv * vbuffer.size);
+	ivec2 hdr_iv = ivec2(uv * HDR_VBUF_0.size);
 	hdr_iv *= ivec2(2, 1);
-	hdr_iv += ivec2(vbuffer.pos);
-	vec3 hdr_color = sample_hdr_buffer_texel(vbuffer, hdr_iv);
+	hdr_iv += ivec2(HDR_VBUF_0.pos);
+	vec3 hdr_color = sample_hdr_buffer_texel(hdr_iv);
 	return hdr_color;
 }
 
@@ -546,10 +546,10 @@ vec3 rtx_compute_light(in vec2 tex_coord, in vec2 tex_coord_glow){
 
 	vec3 point_light = getPointLightSources(tex_coord);
 	vec2 coord_glow_compensated = tex_coord_glow + camera_compensation() / GLOW_BOUNDS;
-	// vec3 glow_light = sample_hdr_buffer(HDR_VBUF_0, coord_glow_compensated);
-	vec3 glow_light = sample_hdr_buffer_gaussian_5x5(HDR_VBUF_0, coord_glow_compensated);
-	// vec3 glow_light = sample_hdr_buffer_gaussian_3x3(HDR_VBUF_0, coord_glow_compensated);
-	// vec3 glow_light = sample_hdr_buffer_uninterpolated(HDR_VBUF_0, coord_glow_compensated + 1.0 / GLOW_SIZE);
+	// vec3 glow_light = sample_hdr_buffer(coord_glow_compensated);
+	vec3 glow_light = sample_hdr_buffer_gaussian_5x5(coord_glow_compensated);
+	// vec3 glow_light = sample_hdr_buffer_gaussian_3x3(coord_glow_compensated);
+	// vec3 glow_light = sample_hdr_buffer_uninterpolated(coord_glow_compensated + 1.0 / GLOW_SIZE);
 
 	float ambient = RTX_exposure_ambient_dust.y;
 
@@ -1285,10 +1285,14 @@ void main()
 	// gl_FragColor.rgb = rgb2srgb(getPointLightSources(tex_coord));
 	// if(int(floor(tex_coord.x * 100.0)) % 2 == 0) {
 	// if(tex_coord.x > 0.5) {
-		// gl_FragColor.rgb = tonemap(rtx_lights);
 		// gl_FragColor.rgb = rtx_lights;
 		// gl_FragColor.rgb = rtx_debug(gl_FragColor.rgb);
 	// }
 	// gl_FragColor.rgb += rtx_debug_light_positions(tex_coord).rgb;
+	// gl_FragColor.rgb = tonemap(rtx_lights);
+	// gl_FragColor.rgb = vec3(fog_of_war_sky_ambient_amount);
+	// gl_FragColor.rgb = vec3(sky_ambient_amount);
+	// gl_FragColor.rgb = texelFetch(tex_skylight, ivec2(tex_coord_skylight * vec2(32.0)), 0).rgb;
+	// gl_FragColor.rgb = texelFetch(tex_skylight, ivec2(tex_coord_skylight * textureSize(tex_skylight, 0)), 0).rgb;
 // END
 }
