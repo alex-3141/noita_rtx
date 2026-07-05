@@ -397,10 +397,17 @@ vec3 getPointLightSources(in vec2 uv){
 	for(uint i = 0u; i < light_count; i++) {
 		Light light = getLightHigh(i);
 		light.pos += subpixel_offset;
+
+		vec2 edge = abs(light.pos - vec2(0.5));
+		float edge_factor  = smoothstep(0.5, 0.485, max(edge.x, edge.y));
+
 		light.pos = (((light.pos - vec2(0.5)) * ratio) + vec2(0.5)) * GLOW_SIZE;
 		light.pos += vec2(1.0, -1.0);
 
 		vec3 point_light = cast_ray_point(pos, light.pos, light.color);
+
+		// Reduce sudden pop-in for lights on edge of screen
+		point_light *= edge_factor;
 
 		// Depth hinting
 
