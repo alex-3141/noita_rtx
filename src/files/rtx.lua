@@ -38,7 +38,7 @@ local update = function()
 
     local delta_x = cam_x - previous_camera_pos_1.x
     local delta_y = cam_y - previous_camera_pos_1.y
-    GameSetPostFxParameter("RL_data", delta_x, delta_y, #light_sources, 0)
+    GameSetPostFxParameter("RL_data", delta_x, delta_y, math.min(#light_sources, GLOBAL_LIGHT_MAX), 0)
 
     previous_camera_pos_1 = previous_camera_pos_0
     previous_camera_pos_0 = { x = cam_x, y = cam_y }

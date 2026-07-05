@@ -323,22 +323,9 @@ int rtx_bitCount(int bits) {
 }
 
 vec4 rtx_debug_light_count(in vec2 uv){
-	ivec2 cell_coord = ivec2(uv * textureSize(RL_tex_lights_cells, 0));
-
-	vec4 texel = texelFetch(RL_tex_lights_cells, cell_coord, 0);
-
-	float count = texel.g * 255.0;
-
-	// return vec4(vec3(count) / 255.0, 1.0);
-
-	vec2 local_uv = mod(uv * vec2(430.0, 242.0), 16.0) / 16.0;
-
-	// return vec4(local_uv, 0.0, 1.0);
-
-	vec3 digit = vec3( digits( local_uv, count, 0.0, 0.0));
-
+	float count = RL_data.z;
+	vec3 digit = vec3( digits( uv * 7.0 + vec2(0.0, -0.3), count, 0.0, 0.0));
 	vec3 color = step(0.01, count) * digit * vec3(1.0, 0.0, 0.0);
-
 	return vec4(color, color == vec3(0.0) ? 0.0 : 1.0);
 }
 

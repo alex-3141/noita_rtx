@@ -26,7 +26,7 @@ pixel_size = 8
 FALLOFF_CLEAR = 0.0005
 FALLOFF_OCCLUDER = 0.03
 LUMINOSITY_THRESHOLD = 0.01
-GLOBAL_LIGHT_COUNT = 32
+GLOBAL_LIGHT_MAX = 256
 
 MAX_LIGHTS = 256
 
@@ -48,10 +48,8 @@ DF_HEIGHT = math.floor(frame_height + border_size * 2)
 GAMMA = 2.2
 INV_GAMMA = 1.0 / GAMMA
 
--- The lights in Hiisi base are merged if this is much higher,
--- causing flickering as light pairs pass in and out of the
--- spatial hashing grid.
-LIGHT_JOIN_DISTANCE = 12
+-- How close together two lights need to be to be joined into one during the optimisation pass
+MIN_LIGHT_JOIN_DISTANCE = 6
 
 --- Converts RGB color values from sRGB space to linear space.
 -- @param r Red component (0.0 to 1.0)

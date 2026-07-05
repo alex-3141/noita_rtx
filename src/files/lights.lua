@@ -2,6 +2,9 @@ local luminosity = function(r, g, b)
     return math.sqrt(0.299 * (r * r) + 0.587 * (g * g) + 0.114 * (b * b))
 end
 
+local previous_light_count = 1
+local previous_join_distance = MIN_LIGHT_JOIN_DISTANCE
+
 local worldToShaderPos = function(x, y)
     -- World height remains constant, width is based on height and aspect ratio
     local height = VIRTUAL_RESOLUTION_Y
@@ -20,10 +23,6 @@ end
 local get_light_sources = function()
     local camera_x, camera_y = GameGetCameraPos()
 
-    -- Light join distances in normalized screen units
-    local x_join_dist = 1 / (430 / LIGHT_JOIN_DISTANCE)
-    local y_join_dist = 1 / (242 / LIGHT_JOIN_DISTANCE)
-
     -- Get all entities in the world
     -- TOOD: can this be made more efficient?
     local allEnts = EntityGetInRadius(camera_x, camera_y, 250)
@@ -31,6 +30,10 @@ local get_light_sources = function()
     local joined_lights = {}
     local lights = {}
     local count = 0
+
+    -- Dynamic hashing distance
+    local join_distance = math.max(MIN_LIGHT_JOIN_DISTANCE, (previous_light_count / GLOBAL_LIGHT_MAX) * previous_join_distance)
+    -- GamePrint(string.format("Light join distance: %.2f (previous count: %d, previous join distance: %.2f)", join_distance, previous_light_count, previous_join_distance))
 
     for _, ent in ipairs(allEnts) do
         local LightComponents = EntityGetComponent(ent, "LightComponent")
@@ -49,10 +52,10 @@ local get_light_sources = function()
                 -- Bake rotations and scale into x and y
                 local cos_rot = math.cos(rotation)
                 local sin_rot = math.sin(rotation)
-                local final_x = light_x + offset_x * cos_rot - offset_y * sin_rot
-                local final_y = light_y + offset_x * sin_rot + offset_y * cos_rot
+                local world_x = light_x + offset_x * cos_rot - offset_y * sin_rot
+                local world_y = light_y + offset_x * sin_rot + offset_y * cos_rot
 
-                local x, y = worldToShaderPos(final_x, final_y)
+                local x, y = worldToShaderPos(world_x, world_y)
 
                 if x < 0 or y < 0 or x > 1 or y > 1 then
                     goto continue
@@ -77,7 +80,7 @@ local get_light_sources = function()
                     goto continue
                 end
 
-                local hash = math.floor(y / y_join_dist) * 10000 + math.floor(x / x_join_dist)
+                local hash = math.floor(world_y / join_distance) * 10000 + math.floor(world_x / join_distance)
 
                 if joined_lights[hash] == nil then
                     joined_lights[hash] = { r = r, g = g, b = b, x = x, y = y }
@@ -101,6 +104,9 @@ local get_light_sources = function()
     for _, light in pairs(joined_lights) do
         table.insert(lights, light)
     end
+
+    previous_light_count = #lights
+    previous_join_distance = join_distance
 
     return lights
 end

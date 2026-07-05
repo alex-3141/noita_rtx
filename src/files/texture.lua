@@ -6,7 +6,7 @@ dofile_once("data/scripts/lib/utilities.lua")
 -- Light color and positions
 local create_light_texture = function()
     -- 2 Pixels per light - Color and Pos
-    LIGHT_TEXTURE = ModImageMakeEditable("rl_lights.png", GLOBAL_LIGHT_COUNT, 2)
+    LIGHT_TEXTURE = ModImageMakeEditable("rl_lights.png", GLOBAL_LIGHT_MAX, 2)
 end
 
 local create_textures = function()
@@ -19,6 +19,9 @@ local push_lights = function(lights)
     end
 
     for index, light in pairs(lights) do
+        if index > GLOBAL_LIGHT_MAX then
+            break
+        end
         -- 12 bits per value for x, y, r, g, b
 
         -- up to 255 is the limit for a single light. Allow up to 16x stacked lights
