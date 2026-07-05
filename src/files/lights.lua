@@ -42,11 +42,17 @@ local get_light_sources = function()
                     goto continue
                 end
 
-                local light_x, light_y = EntityGetTransform(ent)
-                -- TODO: Test how entity rotation effects this
-                light_x = light_x + ComponentGetValue2(comp, 'offset_x')
-                light_y = light_y + ComponentGetValue2(comp, 'offset_y')
-                local x, y = worldToShaderPos(light_x, light_y)
+                local light_x, light_y, rotation, scale_x, scale_y = EntityGetTransform(ent)
+                local offset_x = ComponentGetValue2(comp, 'offset_x') * scale_x
+                local offset_y = ComponentGetValue2(comp, 'offset_y') * scale_y
+
+                -- Bake rotations and scale into x and y
+                local cos_rot = math.cos(rotation)
+                local sin_rot = math.sin(rotation)
+                local final_x = light_x + offset_x * cos_rot - offset_y * sin_rot
+                local final_y = light_y + offset_x * sin_rot + offset_y * cos_rot
+
+                local x, y = worldToShaderPos(final_x, final_y)
 
                 if x < 0 or y < 0 or x > 1 or y > 1 then
                     goto continue
