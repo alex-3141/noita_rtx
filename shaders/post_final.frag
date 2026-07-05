@@ -1051,7 +1051,10 @@ void main()
 
 // DELETE 	lights *= fog_of_war;
 // END
-// DELETE  	lights += max(0.35 - fog_of_war_sky_ambient_amount, 0.0) * dither_srgb( fog_of_war, noise.b, 128.0 );
+// REPLACE  	lights += max(0.35 - fog_of_war_sky_ambient_amount, 0.0) * dither_srgb( fog_of_war, noise.b, 128.0 );
+	// Don't allow fog of war to appear over exposed sky
+	// TODO: Consider redoing the fog of war entirely, base game implementation is a bit messy
+	fog_of_war = max(fog_of_war, vec3(1.0 - color_fg.a));
 // END
 
 // ==========================================================================================================
