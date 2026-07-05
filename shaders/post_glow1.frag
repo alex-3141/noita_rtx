@@ -138,21 +138,7 @@ vec3 castRays(vec2 uv){
 		}
 	}
 
-    // Internal rays, as casting the previous rays away from the origin misses this area
-    // This reduces aliasing effects on single emissive pixels when the camera is moving
-    vec3 internal_color = vec3(0.0);
-
-    for(float y = -1.5; y < 1.5; y += 0.5){
-        for(float x = -1.5; x < 1.5; x += 0.5){
-            vec2 p = round(center_pos) + vec2(x, y);
-            if (sample_sdf(p).material == 2u) internal_color += srgb2rgb(sample_emitter_color(p / GLOW_BOUNDS));
-        }
-    }
-
-    internal_color /= 16.0;
-    internal_color = internal_color * internal_color; // Looks best by eye
-
-	return color / rays + internal_color;
+	return color / rays;
 }
 
 vec3 monteCarlo(vec2 uv){
