@@ -73,6 +73,7 @@ const vec2 SCREEN_SIZE = vec2(431.0, 242.0);
 #include "../lygia/color/tonemap.glsl"
 #include "../lygia/color/space/srgb2rgb.glsl"
 #include "../lygia/color/space/rgb2srgb.glsl"
+#include "../lygia/color/luma.glsl"
 
 // COMMON
 
@@ -1081,7 +1082,9 @@ void main()
 
 	float edge_dist = length(tex_coord - vec2(0.5)) * 2.0;
 	float edge_dist_inv = 1.0 - edge_dist;
-	lights += vec3(edge_dist_inv * drugged_nightvision_amount);
+// REPLACE 	lights += vec3(edge_dist_inv * drugged_nightvision_amount);
+	float rtx_wormvision_distance = smoothstep(0.4, -0.1, (edge_dist_inv + 0.2));
+// END
 	edge_dist = clamp( edge_dist, 0.0, 1.0 );
 
 // ==========================================================================================================
@@ -1122,6 +1125,13 @@ void main()
 // START
 	vec4 rtx_fog = vec4(fog_color_fg.rgb, fog_amount_fg * fog_amount_multiplier_final);
 	// "color" is background layer, and becomes the combined composite after this line
+
+	// Wormvision lighting
+	vec3 wormvision_lights_outer = vec3(1.0);
+	vec3 wormvision_lights_inner = pow(lights + vec3(0.1), vec3(0.7));
+	vec3 wormvision_lights = mix(wormvision_lights_inner, wormvision_lights_outer, rtx_wormvision_distance);
+	lights = mix(lights, wormvision_lights, drugged_nightvision_amount);
+
 	color = rtx_composite(color_fg, color, rtx_fog, lights);
 // END
 
@@ -1132,8 +1142,16 @@ void main()
 	color = rtx_tonemap(color);
 	// Convert back to SRGB. The color grading after this step would be authored in SRGB space.
 	color = rgb2srgb(color);
-	// Non-diagetic effects
-	color *= fog_of_war;
+
+	// === Non-diagetic effects ===
+
+	// Wormvision
+	vec3 wormcolor_inner = color * 1.5 * drugged_nightvision_amount;
+	vec3 wormcolor_outer = (vec3(1.0) - color.rgb) * pow(luma(color), 0.6);
+	color = mix(color, mix(wormcolor_inner, wormcolor_outer, rtx_wormvision_distance), drugged_nightvision_amount);
+
+	// Fog of war
+	color *= mix(fog_of_war, vec3(0.75), drugged_nightvision_amount);
 // END
 
 	color = mix(color, vec3((color.r + color.g + color.b) * 0.3333), color_grading.a);
