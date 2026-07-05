@@ -81,6 +81,9 @@ local function processMaterial(cell)
         -- Occluder - Set opaque bit
         -- Note: We could include the full color or other information in the lower 6 bits.
         --       This may be useful for something in the future.
+        -- Note: Setting a glow color for occluders like this clobbers any electricity
+        --       color, preventing the electricity contributing to lighting. Liquids
+        --       still work through
         cell.attr.gfx_glow_color = colorToHex( { r = 64, g = 64, b = 64 })
         cell.attr.gfx_glow = "1023"
     end
