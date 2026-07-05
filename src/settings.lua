@@ -57,7 +57,7 @@ local function render_settings()
       id = "ambient",
       ui_name = L["ambient"],
       ui_description = L["ambient_desc"],
-      value_default = 0.08,
+      value_default = 0.2,
       value_min = 0.0,
       value_max = 1.0,
       value_display_multiplier = 100,
