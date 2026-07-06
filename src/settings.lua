@@ -6,11 +6,11 @@ local translations = {
   ["english"] = {
     ["title"] = "Noita RTX",
     ["exposure"] = "Exposure level",
-    ["exposure_desc"] = "Multiplier applied to all light before mixing colors",
+    ["exposure_desc"] = "How bright light sources are",
     ["ambient"] = "Ambient light level",
-    ["ambient_desc"] = "Amount of ambient light added before mixing colors",
+    ["ambient_desc"] = "How much ambient light there is",
     ["dust"] = "Dust amount",
-    ["dust_desc"] = "Amount of light added after mixing colors",
+    ["dust_desc"] = "How much dust is in the air",
   },
 }
 
