@@ -11,7 +11,7 @@ local push_uniforms = function()
   local exposure = ModSettingGet("noita_rtx.exposure")
   local ambient = ModSettingGet("noita_rtx.ambient")
   local dust = ModSettingGet("noita_rtx.dust")
-  GameSetPostFxParameter("RTX_exposure_ambient_dust", exposure, ambient, dust, 0.0)
+  GameSetPostFxParameter("rtx_exposure_ambient_dust", exposure, ambient, dust, 0.0)
 end
 
 local init = function()
@@ -38,7 +38,7 @@ local update = function()
 
     local delta_x = cam_x - previous_camera_pos_1.x
     local delta_y = cam_y - previous_camera_pos_1.y
-    GameSetPostFxParameter("RL_data", delta_x, delta_y, math.min(#light_sources, GLOBAL_LIGHT_MAX), 0)
+    GameSetPostFxParameter("rtx_cameradelta_lightcount", delta_x, delta_y, math.min(#light_sources, GLOBAL_LIGHT_MAX), 0)
 
     previous_camera_pos_1 = previous_camera_pos_0
     previous_camera_pos_0 = { x = cam_x, y = cam_y }

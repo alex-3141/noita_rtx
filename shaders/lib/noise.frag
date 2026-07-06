@@ -1,3 +1,6 @@
+#ifndef INCLUDE_NOISE
+#define INCLUDE_NOISE
+
 // Generated statiotemporal blue noise
 const uint blue_noise_LUT_32x32x3[768] = uint[](
     0x84049EC0u, 0x85FF795Cu, 0xB559A380u, 0xF8AF67CFu, 0xA7D73DA0u, 0x1039EA75u, 0xA81CD4A3u, 0x195D0B77u, 
@@ -108,3 +111,5 @@ float getBlueNoise(int frame, ivec2 st) {
 
 	return float( (blue_noise_LUT_32x32x3[array_index] >> (pack_index * 8)) & 0xFF ) / 255.0;
 }
+
+#endif

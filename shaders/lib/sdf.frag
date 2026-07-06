@@ -1,34 +1,8 @@
-struct SDFSample {
-	float dist;
-	uint material;
-};
+#ifndef INCLUDE_SDF
+#define INCLUDE_SDF
 
-SDFSample sample_sdf(vec2 pos) {
-    ivec2 offset = ivec2(0, 0);
-
-	if(pos.y < 121.0){
-        offset = ivec2(0, 121);
-	}
-
-	vec3 s_texel = texelFetch(BUFFER, ivec2(pos + offset), 0).rgb;
-
-    float dist;
-    int material = 3;
-
-    if(pos.y < 121.0){
-        material = (int(s_texel.b * 255.0) >> 2) & 0x3;
-        dist = s_texel.r;
-    } else {
-        material = int(s_texel.b * 255.0) & 0x3;
-        dist = s_texel.g;
-    }
-
-    return SDFSample(dist, material);
-}
-
-float sample_emitter_sdf(vec2 uv) {
-	return texelFetch(BUFFER, ivec2(uv * vec2(107, 59)) + ivec2(215, 0), 0).b;
-}
+#include "material.frag"
+#include "vbuffer.frag"
 
 float distanceFieldPassHorizontal(ivec2 st){
 	int dist = 255;
@@ -90,7 +64,7 @@ float emitterDistanceFieldPassHorizontal(ivec2 st){
 	return float(dist) / 255.0;
 }
 
-vec3 build_sdf(ivec2 buf_st){
+vec3 build_sdf(ivec2 buf_st, vec3 outColor){
     // SDF Pipeline step 1b
 
     // First vertical pass
@@ -102,27 +76,6 @@ vec3 build_sdf(ivec2 buf_st){
         distLower,
         outColor.b
     );
-}
-
-SDFSample sample_sdf_texel(ivec2 st) {
-	ivec2 offset = ivec2(0);
-	if(st.y < 121){
-		offset = ivec2(0, 121);
-	}
-	ivec2 sample_st = ivec2(st) + offset;
-	vec3 texel = texelFetch(BUFFER, sample_st, 0).rgb;
-
-	float dist = 0.0;
-	uint material = 0u;
-	if(st.y < 121){
-		dist = texel.r;
-		material = (uint(texel.b * 255.0) >> 6) & 0x3u;
-	} else {
-		dist = texel.g;
-		material = (uint(texel.b * 255.0) >> 4) & 0x3u;
-	}
-
-	return SDFSample(dist, material);
 }
 
 // Finds the distance to the nearest material in the vertical direction
@@ -216,3 +169,5 @@ float emitterDistanceFieldPassVertical(ivec2 st){
 
 	return dist / 255.0;
 }
+
+#endif

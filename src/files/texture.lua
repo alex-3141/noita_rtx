@@ -6,7 +6,7 @@ dofile_once("data/scripts/lib/utilities.lua")
 -- Light color and positions
 local create_light_texture = function()
     -- 2 Pixels per light - Color and Pos
-    LIGHT_TEXTURE = ModImageMakeEditable("rl_lights.png", GLOBAL_LIGHT_MAX, 2)
+    LIGHT_TEXTURE = ModImageMakeEditable("rtx_lights.png", GLOBAL_LIGHT_MAX, 2)
 end
 
 local create_textures = function()
@@ -45,7 +45,7 @@ local push_lights = function(lights)
         ModImageSetPixel(LIGHT_TEXTURE, index - 1, 1, pixel_1)
     end
 
-    GameSetPostFxTextureParameter("RL_tex_lights", "rl_lights.png", TEXTURE_FILTERING_MODE.NEAREST, TEXTURE_WRAPPING_MODE.CLAMP, true)
+    GameSetPostFxTextureParameter("rtx_tex_lights", "rtx_lights.png", TEXTURE_FILTERING_MODE.NEAREST, TEXTURE_WRAPPING_MODE.CLAMP, true)
 end
 
 return {

@@ -1,3 +1,8 @@
+#ifndef INCLUDE_MATERIAL
+#define INCLUDE_MATERIAL
+
+#include "../../lygia/color/luma.glsl"
+
 // Material types
 // Opaque               0
 // Liquid				1
@@ -56,7 +61,7 @@ uint getMaterialType(vec4 color){
 	// Fire particles
 	if(color.a > 0.0 && color.a < 1.0) {
 		// Only keep colors above a certain brightness threshold
-		if(luminance(color.rgb) < 0.05) {
+		if(luma(color.rgb) < 0.05) {
 			return 3u;
 		} else {
 			return 2u;
@@ -89,16 +94,17 @@ uint sampleMaterial(ivec2 st){
 
 float materialOcclusionFactor(uint material){
 	if(material == 0u){
-		return 0.84; // Opaque
+		return 0.89; // Opaque
 	}
 	if(material == 1u){
-		return 0.95; // Liquid
+		return 0.98; // Liquid
 	}
 	if(material == 2u){
-        // Rays stop on emissive surfaces, so this only serves to fill in emissive areas
-        // with a solid color
 		return 1.0; // Emissive
 	}
 
 	return 1.0; // Air or gas
 }
+
+
+#endif

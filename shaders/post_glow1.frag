@@ -21,59 +21,6 @@ out vec4 outColor;
 #include "./lib/sdf.frag"
 #include "./lib/noise.frag"
 
-
-vec3 sample_emitter_color_texel(ivec2 st){
-    ivec2 color_st = st;
-
-    color_st /= 2;
-
-    // Clamp to ensure we sample a color at the edges
-    color_st = clamp(color_st, ivec2(0, 0), ivec2(214, 119));
-
-    bool top = color_st.y > int(59);
-
-    if(top){
-        color_st.y -= int(60);
-    }
-
-	uvec3 smp = uvec3(sample_buffer_texel(VBUF_COLOR_1, color_st) * 255.0) & 0xFF;
-
-    uvec3 color_u = uvec3(0);
-
-    if(top){
-        color_u = uvec3(
-            smp.g,
-            smp.b >> 4,
-            smp.b
-        );
-    } else {
-        color_u = uvec3(
-            smp.r >> 4,
-            smp.r,
-            smp.g >> 4
-        );
-    }
-
-    color_u = color_u & 0xF;
-
-    vec3 color = vec3(color_u << 4) / 255.0;
-
-	if (color == vec3(0.0)) {
-        // Blast an extremely bright magenta color to make color lookup misses obvious during debugging
-		// return vec3(10.0, 0.0, 10.0);
-
-		return vec3(0.0, 0.0, 0.0);
-	}
-
-    return color;
-}
-
-vec3 sample_emitter_color(vec2 uv) {
-    ivec2 emitter_st = ivec2(uv * GLOW_BOUNDS);
-	vec3 smp = sample_emitter_color_texel(emitter_st);
-	return smp;
-}
-
 vec3 castRays(vec2 uv){
 	const float rays = 256.0;
 	const uint steps = 24u;
@@ -187,6 +134,6 @@ void main()
 
 	if (within(SDF)) {
 		ivec2 buf_st = global_st_to_vbuffer_st(st, SDF);
-        outColor.rgb = build_sdf(buf_st);
+        outColor.rgb = build_sdf(buf_st, outColor.rgb);
 	}
 }

@@ -1,3 +1,16 @@
+// ============================================================================
+//  This is a copy of the unmodded `post_final.frag` file from the game, in  //
+//  which custom macros (DELETE, REPLACE, etc.) have been inserted where mod //
+//  changes should be made. This file is  read by lib/generate_patches.lua   //
+//  which generates lua code to apply these patches at runtime. This aims to //
+//  keep this file (mostly) syntactically correct for formatting and linting //
+//                                                                           //
+//  This file could be stripped down to only the macros, but being able to   //
+//  quickly refer to the existing shader code speeds up development          //
+//                                                                           //
+//  Include directives are handled by lib/resolve_includes.lua at buildtime  //
+// ============================================================================
+
 // REPLACE #version 110
 #version 130
 // END
@@ -62,211 +75,48 @@ varying vec2 tex_coord_fogofwar;
 // Noita RTX ========================================================================================
 // ==================================================================================================
 
-const vec2 SCREEN_SIZE = vec2(431.0, 242.0);
-// #define DEBUG_RULER
+// Debug visuals
+// #define RTX_DEBUG_BUFFER
+// #define RTX_DEBUG_SOURCE
+// #define RTX_DEBUG_LIGHT_POSITIONS
+// #define RTX_DEBUG_LIGHT_POSITIONS_RULER
+// #define RTX_DEBUG_SDF
+// #define RTX_DEBUG_EMITTER
+// #define RTX_DEBUG_EMITTER_FILL
+// #define RTX_DEBUG_MATERIAL
+// #define RTX_DEBUG_EMITTER_COLOR
 
-// Lygia includes
+
+#define TONEMAP_FNC tonemapUncharted
 #undef DIGITS_SIZE
 #define DIGITS_SIZE vec2(0.25)
+#define BUFFER tex_glow
+
+uniform sampler2D rtx_tex_lights;
+uniform vec4 rtx_cameradelta_lightcount;
+uniform vec4 rtx_exposure_ambient_dust;
+
+const vec2 SCREEN_SIZE = vec2(431.0, 242.0);
+
+// Includes
 #include "../lygia/draw/digits.glsl"
-#define TONEMAP_FNC tonemapUncharted
 #include "../lygia/color/tonemap.glsl"
 #include "../lygia/color/space/srgb2rgb.glsl"
 #include "../lygia/color/space/rgb2srgb.glsl"
 #include "../lygia/color/luma.glsl"
-
-// COMMON
-
-uniform sampler2D RL_tex_lights;
-uniform sampler2D RL_tex_lights_list;
-uniform sampler2D RL_tex_lights_cells;
-uniform sampler2D RL_tex_df;
-uniform vec4 RL_light_count;
-uniform vec4 RL_time;
-uniform vec4 RL_data;
-uniform vec4 RTX_exposure_ambient_dust;
-uniform vec4 camera_delta;
-uniform vec4 player_pos;
-
-ivec2 glow_iv = ivec2(tex_coord_glow_ * textureSize(tex_glow, 0));
-
-struct VBuffer {
-	vec2 pos;
-	vec2 size;
-};
-
-// Virtual buffers
-// The texture is split into different zones that are used in place of extra shader passes.
-const vec2 GLOW_SIZE = vec2(431.0, 242.0);
-const vec2 GLOW_BOUNDS = GLOW_SIZE - vec2(1.0);
-
-const vec2 VBUF_SIZE = vec2(106.0, 60.0);
-const vec2 VBUF_SIZE_UV = VBUF_SIZE / GLOW_SIZE;
-const vec2 VBUF_BOUNDS = VBUF_SIZE - vec2(1.0);
-const vec2 VBUF_BOUNDS_UV = VBUF_BOUNDS / GLOW_BOUNDS;
-
-const float HALF_WIDTH = GLOW_SIZE.x / 2.0;
-
-const vec2 HDR_VBUF_SIZE = vec2(HALF_WIDTH, 60.0);
-const vec2 HDR_VBUF_SIZE_UV = HDR_VBUF_SIZE / GLOW_SIZE;
-const vec2 HDR_VBUF_BOUNDS = HDR_VBUF_SIZE - vec2(1.0);
-const vec2 HDR_VBUF_BOUNDS_UV = HDR_VBUF_BOUNDS / GLOW_BOUNDS;
-
-const float COLOR_VBUF_WIDTH = HALF_WIDTH;
-const vec2 COLOR_VBUF_SIZE = vec2(COLOR_VBUF_WIDTH, 60.0);
-const vec2 COLOR_VBUF_SIZE_UV = COLOR_VBUF_SIZE / GLOW_SIZE;
-const vec2 COLOR_VBUF_BOUNDS = COLOR_VBUF_SIZE - vec2(1.0);
-const vec2 COLOR_VBUF_BOUNDS_UV = COLOR_VBUF_BOUNDS / GLOW_BOUNDS;
-
-
-const VBuffer VBUF_COLOR_0 = VBuffer(vec2(0.0, 0.0), COLOR_VBUF_BOUNDS);
-const VBuffer VBUF_COLOR_1 = VBuffer(vec2(0.0, COLOR_VBUF_SIZE.y), COLOR_VBUF_BOUNDS);
-const VBuffer HDR_VBUF_0 = VBuffer(vec2(HDR_VBUF_SIZE.x, HDR_VBUF_SIZE.y), HDR_VBUF_BOUNDS);
-const VBuffer SDF = VBuffer(vec2(0, 120), vec2(430, 121));
-
-struct SDFSample {
-	float dist;
-	uint material;
-};
-
-SDFSample sample_sdf_texel(ivec2 iv) {
-	ivec2 offset = ivec2(0);
-	if(iv.y < 121){
-		offset = ivec2(0, 120);
-	}
-	ivec2 sample_iv = ivec2(iv) + offset;
-	vec3 texel = texelFetch(tex_glow, sample_iv, 0).rgb;
-
-	float dist = 0.0;
-	uint material = 0u;
-	if(iv.y < 121){
-		dist = texel.r;
-		material = (uint(texel.b * 255.0) >> 6) & 0x3u;
-	} else {
-		dist = texel.g;
-		material = (uint(texel.b * 255.0) >> 4) & 0x3u;
-	}
-
-	return SDFSample(dist, material);
-}
+#include "./lib/common.frag"
+#include "./lib/vbuffer.frag"
+#include "./lib/sdf.frag"
 
 // Get the camera delta across 2 frames
 vec2 camera_compensation() {
 	// Only add offset if game isn't paused to not interfere with screenshots
 	// TODO: Find better way to tell if game is paused, this may be used for other things
 	if (overlay_color.a < 0.7) {
-		return RL_data.xy;
+		return rtx_cameradelta_lightcount.xy;
 	}
 
 	return vec2(0.0);
-}
-
-vec3 sample_hdr_buffer_texel(ivec2 iv) {
-	// Don't sample outside buffer
-	iv = clamp(iv, ivec2(HDR_VBUF_0.pos) - ivec2(-2, -1), ivec2(HDR_VBUF_0.pos + HDR_VBUF_0.size - ivec2(3, 1)));
-
-	vec3 high_sample = texelFetch(tex_glow, iv + ivec2(0, 0), 0).rgb;
-	vec3 low_sample  = texelFetch(tex_glow, iv + ivec2(1, 0), 0).rgb;
-
-	uvec3 high_bits = uvec3(high_sample * 255.0) << 8;
-	uvec3 low_bits = uvec3(low_sample * 255.0);
-	vec3 hdr_color = vec3(high_bits | low_bits) / 255.0;
-	return hdr_color;
-}
-
-vec3 sample_hdr_buffer(vec2 uv) {
-	vec2 hdr_uv = uv * vec2(0.5, 1.0);
-	ivec2 hdr_iv = ivec2(hdr_uv * HDR_VBUF_0.size);
-	hdr_iv *= ivec2(2, 1);
-	hdr_iv += ivec2(HDR_VBUF_0.pos);
-
-	vec3 hdr_color_ul = sample_hdr_buffer_texel(hdr_iv + ivec2(0, 0));
-	vec3 hdr_color_ur = sample_hdr_buffer_texel(hdr_iv + ivec2(2, 0));
-	vec3 hdr_color_ll = sample_hdr_buffer_texel(hdr_iv + ivec2(0, 1));
-	vec3 hdr_color_lr = sample_hdr_buffer_texel(hdr_iv + ivec2(2, 1));
-
-    // lerp
-	vec2 f = fract(hdr_uv * HDR_VBUF_0.size);
-	vec3 hdr_color_top = mix(hdr_color_ul, hdr_color_ur, f.x);
-	vec3 hdr_color_bottom = mix(hdr_color_ll, hdr_color_lr, f.x);
-	vec3 hdr_color = mix(hdr_color_top, hdr_color_bottom, f.y);
-
-	// return vec3(f, 0.0); // Debug
-
-	return hdr_color;
-}
-
-vec3 sample_hdr_buffer_gaussian_3x3(vec2 uv) {
-	vec2 pixel = 1.0 / (HDR_VBUF_0.size * vec2(1.0, 2.0));
-
-	vec3 hdr_color = vec3(0.0);
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, -1)) * 0.0625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, -1)) * 0.125;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, -1)) * 0.0625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, 0)) * 0.125;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, 0)) * 0.25;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, 0)) * 0.125;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, 1)) * 0.0625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, 1)) * 0.125;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, 1)) * 0.0625;
-
-	return hdr_color;
-}
-
-vec3 sample_hdr_buffer_gaussian_5x5(vec2 uv) {
-	vec2 pixel = 1.0 / (HDR_VBUF_0.size * vec2(1.0, 2.0));
-
-	vec3 hdr_color = vec3(0.0);
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-2, -2)) * 0.00390625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, -2)) * 0.015625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, -2)) * 0.0234375;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, -2)) * 0.015625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(2, -2)) * 0.00390625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-2, -1)) * 0.015625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, -1)) * 0.0625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, -1)) * 0.09375;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, -1)) * 0.0625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(2, -1)) * 0.015625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-2, 0)) * 0.0234375;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, 0)) * 0.09375;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, 0)) * 0.140625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, 0)) * 0.09375;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(2, 0)) * 0.0234375;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-2, 1)) * 0.015625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, 1)) * 0.0625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, 1)) * 0.09375;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, 1)) * 0.0625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(2, 1)) * 0.015625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-2, 2)) * 0.00390625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(-1, 2)) * 0.015625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(0, 2)) * 0.0234375;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(1, 2)) * 0.015625;
-	hdr_color += sample_hdr_buffer(uv + pixel * vec2(2, 2)) * 0.00390625;
-
-	return hdr_color;
-}
-
-vec3 sample_hdr_buffer_uninterpolated(vec2 uv) {
-	uv *= vec2(0.5, 1.0);
-	ivec2 hdr_iv = ivec2(uv * HDR_VBUF_0.size);
-	hdr_iv *= ivec2(2, 1);
-	hdr_iv += ivec2(HDR_VBUF_0.pos);
-	vec3 hdr_color = sample_hdr_buffer_texel(hdr_iv);
-	return hdr_color;
-}
-
-float materialOcclusionFactor(uint material){
-	if(material == 0u){
-		return 0.89; // Opaque
-	}
-	if(material == 1u){
-		return 0.98; // Liquid
-	}
-	if(material == 2u){
-		return 1.0; // Emissive
-	}
-
-	return 1.0; // Gas
 }
 
 #define K_CLEAR 0.002
@@ -311,33 +161,21 @@ vec3 cast_ray_point(in vec2 pos, in vec2 target, in vec3 target_color){
 	return target_color * rayIntensity * geometricFalloff;
 }
 
-int rtx_bitCount(int bits) {
-	int count = 0;
-
-	while (bits > 0) {
-		count += bits & 1;
-		bits = bits >> 1;
-	}
-
-	return count;
-}
-
 vec4 rtx_debug_light_count(in vec2 uv){
-	float count = RL_data.z;
+	float count = rtx_cameradelta_lightcount.z;
 	vec3 digit = vec3( digits( uv * 7.0 + vec2(0.0, -0.3), count, 0.0, 0.0));
 	vec3 color = step(0.01, count) * digit * vec3(1.0, 0.0, 0.0);
 	return vec4(color, color == vec3(0.0) ? 0.0 : 1.0);
 }
-
 
 struct Light {
 	vec3 color;
 	vec2 pos;
 };
 
-Light getLightHigh(in uint index) {
-	uvec4 texel_0 = uvec4(texelFetch(RL_tex_lights, ivec2(index, 0), 0) * 255.0);
-	uvec4 texel_1 = uvec4(texelFetch(RL_tex_lights, ivec2(index, 1), 0) * 255.0);
+Light getLight(in uint index) {
+	uvec4 texel_0 = uvec4(texelFetch(rtx_tex_lights, ivec2(index, 0), 0) * 255.0);
+	uvec4 texel_1 = uvec4(texelFetch(rtx_tex_lights, ivec2(index, 1), 0) * 255.0);
 
 	float r = float(texel_0.r | texel_0.g << 8 & 0xF00u) / 255.0;
 	float g = float(texel_0.g >> 4 | texel_0.b << 4) / 255.0;
@@ -349,23 +187,9 @@ Light getLightHigh(in uint index) {
 	return Light (vec3(r, g, b), vec2(x, y));
 }
 
-// TODO: Low precision version that uses 1 pixel
-//       R: 4 bits
-//       G: 4 bits
-//       B: 4 bits
-//       X: 10 bits
-//       Y: 10 bits
-Light getLightLow(in uint index) {
-	vec3 color = vec3(0.0);
-
-	vec2 pos = vec2(0.0);
-
-	return Light (color, pos);
-}
-
 vec3 getPointLightSources(in vec2 uv){
 	vec3 accumulated_light = vec3(0.0);
-	uint light_count = uint(RL_data.z);
+	uint light_count = uint(rtx_cameradelta_lightcount.z);
 	vec2 subpixel_offset = fract(camera_pos.xy) / GLOW_SIZE;
 
 	// The coordiante spaces of the world and SDF differ due to different resolutions.
@@ -382,7 +206,7 @@ vec3 getPointLightSources(in vec2 uv){
 	pos += offset;
 
 	for(uint i = 0u; i < light_count; i++) {
-		Light light = getLightHigh(i);
+		Light light = getLight(i);
 		light.pos += subpixel_offset;
 
 		vec2 edge = abs(light.pos - vec2(0.5));
@@ -422,17 +246,17 @@ vec3 getPointLightSources(in vec2 uv){
 
 vec3 rtx_debug_light_positions(in vec2 uv){
 	vec3 color = vec3(0.0);
-	uint light_count = uint(RL_data.z);
+	uint light_count = uint(rtx_cameradelta_lightcount.z);
 	vec2 subpixel_offset = fract(camera_pos.xy) / SCREEN_SIZE;
 	uv += subpixel_offset;
 	vec2 frag = 1.0 / window_size;
 
 	for(uint i = 0u; i < light_count; i++) {
-		Light light = getLightHigh(i);
+		Light light = getLight(i);
 		light.pos += subpixel_offset;
 		vec2 diff = (light.pos - uv) * vec2(SCREEN_SIZE.x / SCREEN_SIZE.y, 1.0);
 
-		#ifdef DEBUG_RULER
+		#ifdef RTX_DEBUG_LIGHT_POSITIONS_RULER
 		if((abs(diff.x) <= frag.x || abs(diff.y) <= frag.y)) {
 		#else
 		if(length(diff) < 0.025 && (abs(diff.x) <= frag.x || abs(diff.y) <= frag.y)) {
@@ -442,90 +266,6 @@ vec3 rtx_debug_light_positions(in vec2 uv){
 	}
 
 	return color;
-}
-
-uint sampleMaterial(ivec2 st){
-	if (st.y < 120) {
-		uint data = uint(texelFetch(tex_glow, st + ivec2(0, 120), 0).b * 255.0);
-		return (data >> 6) & 0x3u;
-	} else {
-		uint data = uint(texelFetch(tex_glow, st, 0).b * 255.0);
-		return (data >> 4) & 0x3u;
-	}
-}
-
-vec3 sample_buffer_texel(VBuffer vbuffer, ivec2 st) {
-	st += ivec2(vbuffer.pos);
-	return texelFetch(tex_glow, st, 0).rgb;
-}
-
-vec3 sample_emitter_color_texel(ivec2 st){
-    ivec2 color_st = st;
-
-    bool top = color_st.y >= int(GLOW_SIZE.y / 2.0 - 1.0);
-
-    if(top){
-        color_st.y -= int(GLOW_SIZE.y / 2);
-    }
-
-    color_st /= 2;
-
-	uvec3 smp = uvec3(sample_buffer_texel(VBUF_COLOR_1, color_st) * 255.0) & 0xFFu;
-
-    uvec3 color_u = uvec3(0u);
-
-    if(top){
-        color_u = uvec3(
-            smp.g,
-            smp.b >> 4u,
-            smp.b
-        );
-    } else {
-        color_u = uvec3(
-            smp.r >> 4u,
-            smp.r,
-            smp.g >> 4u
-        );
-    }
-
-    color_u = color_u & 0xFu;
-
-    vec3 color = vec3(color_u << 4u) / 255.0;
-
-	// if (color == vec3(0.0)) {
-	// 	return vec3(vec2(st) / VBUF_SIZE,  0.0);
-	// }
-
-    return color;
-}
-
-vec3 sample_emitter_color(vec2 uv) {
-    ivec2 emitter_st = ivec2(uv * GLOW_BOUNDS);
-	vec3 smp = sample_emitter_color_texel(emitter_st);
-	return smp;
-}
-
-uvec3 sample_glow_source_st(ivec2 st){
-	uvec3 color_u = uvec3(texelFetch(tex_glow_unfiltered, st, 0).rgb * 255.0);
-
-	// Non-glow materials
-	if((color_u.r & 0x80u) != 0u){
-		return uvec3(0);
-	}
-
-	// Kill superbright particles
-	// uint maxChannel = max(color_u.r, max(color_u.g, color_u.b));
-	// if(maxChannel > 0xFu){
-	// 	color_u >>= 4u;
-	// }
-
-    // Strip non-color bits
-    // color_u = color_u & 0xFu;
-
-	// Bring back into original range
-	// color_u *= 4u;
-
-    return color_u;
 }
 
 vec3 rtx_compute_light(in vec2 tex_coord, in vec2 tex_coord_glow){
@@ -538,7 +278,7 @@ vec3 rtx_compute_light(in vec2 tex_coord, in vec2 tex_coord_glow){
 	// vec3 glow_light = sample_hdr_buffer_gaussian_3x3(coord_glow_compensated);
 	// vec3 glow_light = sample_hdr_buffer_uninterpolated(coord_glow_compensated + 1.0 / GLOW_SIZE);
 
-	float ambient = RTX_exposure_ambient_dust.y;
+	float ambient = rtx_exposure_ambient_dust.y;
 
 	// Light multipliers. These should balance all light sources to a common standard candle at 1.0 exposure
 	const float point_mul = 20.0;
@@ -567,7 +307,7 @@ vec3 rtx_composite(in vec4 fg_srgb, in vec3 bg_srgb, in vec4 fog, in vec3 light)
 
 	vec3 composited = mix(bg, fg.rgb, fg.a);
 
-	float dust = RTX_exposure_ambient_dust.z;
+	float dust = rtx_exposure_ambient_dust.z;
 
 	// Additive light
 
@@ -580,30 +320,27 @@ vec3 rtx_composite(in vec4 fg_srgb, in vec3 bg_srgb, in vec4 fog, in vec3 light)
 }
 
 vec3 rtx_tonemap(in vec3 composited){
-	float exposure = RTX_exposure_ambient_dust.x;
+	float exposure = rtx_exposure_ambient_dust.x;
 	vec3 tonemapped = tonemap(composited * exposure);
 	return tonemapped;
 }
 
-vec3 rtx_debug(in vec3 color){
-	vec2 uv = vec2(tex_coord_.x, 1.0 - tex_coord_.y);
-	// ================ Buffer visualisations ================
+vec3 rtx_debug(in vec2 uv, in vec3 color){
+	uv = vec2(uv.x, 1.0 - uv.y);
 
-	// // Glow buffer
-	// color = texelFetch(tex_glow, ivec2((uv) * GLOW_SIZE), 0).rgb;
+	// ================ Glow buffer ================
+	#ifdef RTX_DEBUG_BUFFER
+	// Glow buffer
+	color = texelFetch(tex_glow, ivec2((uv) * GLOW_SIZE), 0).rgb;
+	#endif
 
-	// Source glow buffer
-	// color = texelFetch(tex_glow_unfiltered, ivec2((uv) * GLOW_SIZE), 0).rgb * 4.0;
+	// ================ Sourge glow buffer ================
+	#ifdef RTX_DEBUG_SOURCE
+	color = texelFetch(tex_glow_unfiltered, ivec2((uv) * GLOW_SIZE), 0).rgb * 4.0;
+	#endif
 
-	// #define VISUAL_SDF
-	// #define VISUAL_EMITTER
-	// #define VISUAL_EMITTER_FILL
-	// #define VISUAL_MATERIAL
-	// #define VISUAL_EMITTER_COLOR
-
-	// ================ SDF Ring visualisation ================
-
-	#ifdef VISUAL_SDF
+	// ================ SDF rings ================
+	#ifdef RTX_DEBUG_SDF
 	SDFSample sdf = sample_sdf_texel(ivec2(uv * GLOW_BOUNDS));
 	uint dist = uint(sdf.dist * 255.0);
 	float ring = ((dist & 3u) == 0u) ? (1.0 - sdf.dist * 3.0) * 0.3 : 0.0;
@@ -611,14 +348,16 @@ vec3 rtx_debug(in vec3 color){
 	#endif
 
 
-	// ================ Emissive pixel visualisation ================
-	#ifdef VISUAL_EMITTER
+	// ================ Emissive pixels ================
+	#if defined(RTX_DEBUG_EMITTER) || defined(RTX_DEBUG_EMITTER_FILL)
 	bool emitter_here = sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS)) == 2u;
-	#ifdef VISUAL_EMITTER_FILL
+
+	#ifdef RTX_DEBUG_EMITTER_FILL
 	if(emitter_here){
 		color = vec3(0.0, 1.0, 1.0);
 	}
 	#else
+
 	bool emitter_side = (
 		sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS) + ivec2( 1,  1)) == 2u ||
 		sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS) + ivec2(-1,  1)) == 2u ||
@@ -634,8 +373,8 @@ vec3 rtx_debug(in vec3 color){
 	#endif
 
 
-	// ================ Material visualisation ================
-	#ifdef VISUAL_MATERIAL
+	// ================ Materials ================
+	#ifdef RTX_DEBUG_MATERIAL
 	uint mat = sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS));
 	if(mat == 0u) {
 		color = vec3(0.7, 0.0, 0.0);
@@ -652,9 +391,14 @@ vec3 rtx_debug(in vec3 color){
 	#endif
 
 
-	// ============= Emitter color visualisation ==============
-	#ifdef VISUAL_EMITTER_COLOR
+	// ============= Emitter color ==============
+	#ifdef RTX_DEBUG_EMITTER_COLOR
 	color = sample_emitter_color(uv);
+	#endif
+
+	// ============= Light positions ==============
+	#if defined(RTX_DEBUG_LIGHT_POSITIONS) || defined(RTX_DEBUG_LIGHT_POSITIONS_RULER)
+	color.rgb += rtx_debug_light_positions(uv).rgb;
 	#endif
 
 	return color;
@@ -1225,7 +969,7 @@ void main()
 // various debug visualizations================================================================================
 
 // INSERT_AFTER // various debug visualizations================================================================================
-	// color += rtx_debug_light_count(tex_coord).rgb;
+	color = rtx_debug(tex_coord_, color);
 // END
 
 	//color.r += 1.0 - fog_of_war.r;
@@ -1267,19 +1011,4 @@ void main()
 	//color.r = tex_coord_warped_lerp;
 	gl_FragColor.rgb  = color;
 	gl_FragColor.a = 1.0;
-// INSERT_AFTER gl_FragColor.a = 1.0;
-	// gl_FragColor.rgb += texture2D(RL_tex_lights_cells, tex_coord).rgb * 8.0;
-	// gl_FragColor.rgb = rgb2srgb(getPointLightSources(tex_coord));
-	// if(int(floor(tex_coord.x * 100.0)) % 2 == 0) {
-	// if(tex_coord.x > 0.5) {
-		// gl_FragColor.rgb = rtx_lights;
-		// gl_FragColor.rgb = rtx_debug(gl_FragColor.rgb);
-	// }
-	// gl_FragColor.rgb += rtx_debug_light_positions(tex_coord).rgb;
-	// gl_FragColor.rgb = tonemap(rtx_lights);
-	// gl_FragColor.rgb = vec3(fog_of_war_sky_ambient_amount);
-	// gl_FragColor.rgb = vec3(sky_ambient_amount);
-	// gl_FragColor.rgb = texelFetch(tex_skylight, ivec2(tex_coord_skylight * vec2(32.0)), 0).rgb;
-	// gl_FragColor.rgb = texelFetch(tex_skylight, ivec2(tex_coord_skylight * textureSize(tex_skylight, 0)), 0).rgb;
-// END
 }

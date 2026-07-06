@@ -211,7 +211,7 @@ vec3 smartDeNoise(vec2 uv, vec2 pixel, float sigma, float kSigma, float threshol
     float invThresholdSqx2 = 0.5 / (threshold * threshold);  // 1.0 / (sigma^2 * 2.0)
     float invThresholdSqrt2PI = INV_SQRT_TAU / threshold;   // 1.0 / (sqrt(2*PI) * sigma)
 
-    vec3 centrPx = sample_hdr_buffer(HDR_VBUF_0, uv);
+    vec3 centrPx = sample_hdr_buffer(uv);
 
     float zBuff = 0.0;
     vec3 aBuff = vec3(0.0);
@@ -223,7 +223,7 @@ vec3 smartDeNoise(vec2 uv, vec2 pixel, float sigma, float kSigma, float threshol
 
             // gaussian factor
             float blurFactor = exp( -dot(d , d) * invSigmaQx2 ) * invSigmaQx2PI;
-            vec3 walkPx = sample_hdr_buffer(HDR_VBUF_0, uv+d*pixel);
+            vec3 walkPx = sample_hdr_buffer(uv+d*pixel);
 
             // adaptive
             vec3 dC = walkPx-centrPx;
@@ -338,7 +338,7 @@ void main(){
         ivec2 hdr_st = global_st_to_vbuffer_st(st, HDR_VBUF_0);
 		ivec2 snap_st = ivec2(hdr_st.x & ~1, hdr_st.y);
 		vec2 uv = vbuffer_st_to_vbuffer_uv(snap_st, HDR_VBUF_0);
-		vec3 glow = sample_hdr_buffer(HDR_VBUF_0, uv);
+		vec3 glow = sample_hdr_buffer(uv);
 		uint material = sample_sdf(uv * GLOW_BOUNDS).material;
 
 		// === Denoising ===

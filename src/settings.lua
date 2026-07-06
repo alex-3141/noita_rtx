@@ -21,7 +21,7 @@ function push_uniforms()
   local exposure = ModSettingGetNextValue("noita_rtx.exposure")
   local ambient = ModSettingGetNextValue("noita_rtx.ambient")
   local dust = ModSettingGetNextValue("noita_rtx.dust")
-  GameSetPostFxParameter("RTX_exposure_ambient_dust", exposure, ambient, dust, 0.0)
+  GameSetPostFxParameter("rtx_exposure_ambient_dust", exposure, ambient, dust, 0.0)
 end
 
 function mod_setting_change_callback( mod_id, gui, in_main_menu, setting, old_value, new_value  )
