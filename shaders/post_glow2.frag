@@ -274,7 +274,7 @@ vec3 downsample_particle_glow(vec2 uv){
 	particle_glow += srgb2rgb(texture2D(tex_glow_source_particles, particle_uv + vec2(-p.x,  p.y)).rgb);
 	particle_glow += srgb2rgb(texture2D(tex_glow_source_particles, particle_uv + vec2( p.x,  p.y)).rgb);
 
-	return particle_glow * 1023.0;
+	return particle_glow / 4.0;
 }
 
 // TODO: Optimisation
@@ -361,9 +361,11 @@ void main(){
 		// Add vanilla particle glow
 		// TODO: This is out of sync with the monte carlo glow. There should be enough free
 		// buffer space to delay this.
-		glow += downsample_particle_glow(uv);
+		glow += downsample_particle_glow(uv) * 1023.0;
 
 		uvec3 glow_bits = uvec3(glow * 255.0);
+		glow_bits = min(glow_bits, 0xFFFFu);
+
         if ((hdr_st.x & 1) == 0) {
 			// High bits
             glow = vec3((glow_bits >> 8) & 0xFFu) / 255.0;
