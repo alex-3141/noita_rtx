@@ -2,6 +2,6 @@
 	name="Noita RTX"
 	description="Lighting overhaul with global illumination"
 	request_no_api_restrictions="0"
-	version="0.5.0"
+	version="0.5.1"
 	> 
 </Mod>
