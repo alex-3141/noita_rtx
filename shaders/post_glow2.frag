@@ -156,7 +156,7 @@ vec3 downsample_particle_glow(vec2 uv){
 	particle_glow += srgb2rgb(texture2D(tex_glow_source_particles, particle_uv + vec2(-p.x,  p.y)).rgb);
 	particle_glow += srgb2rgb(texture2D(tex_glow_source_particles, particle_uv + vec2( p.x,  p.y)).rgb);
 
-	return particle_glow / 4.0;
+	return rgb2srgb(particle_glow);
 }
 
 vec3 sample_color_0(ivec2 st){
@@ -209,12 +209,11 @@ void main(){
 
     if (within(VBUF_PARTICLE_0)) {
 		vec2 uv = global_st_to_vbuffer_uv(st, VBUF_PARTICLE_0);
-		outColor.rgb = vec3(uv, 0.0);
+		outColor.rgb = downsample_particle_glow(uv);
     }
 
     if (within(VBUF_PARTICLE_1)) {
-		vec2 uv = global_st_to_vbuffer_uv(st, VBUF_PARTICLE_1);
-		outColor.rgb = vec3(uv, 0.0);
+		outColor.rgb = texelFetch(BUFFER, st - ivec2(0, 60),0).rgb;
     }
 
     if (within(VBUF_NORMAL_0)) {
@@ -276,9 +275,8 @@ void main(){
 		vec3 glow = smartDeNoise(uv, pixel, sigma, kSigma, threshold);
 
 		// Add vanilla particle glow
-		// TODO: This is out of sync with the monte carlo glow. There should be enough free
-		// buffer space to delay this.
-		glow += downsample_particle_glow(uv) * 255.0;
+		vec3 particle_glow = texelFetch(BUFFER, ivec2(VBUF_PARTICLE_1.pos + round(uv * (VBUF_PARTICLE_1.size - vec2(1.0)))), 0).rgb;
+		glow += srgb2rgb(particle_glow) * 512.0;
 
 		uvec3 glow_bits = uvec3(glow * 255.0);
 		glow_bits = min(glow_bits, 0xFFFFu);
