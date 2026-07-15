@@ -92,15 +92,19 @@ uint sampleMaterial(ivec2 st){
 	}
 }
 
+uint sampleMaterial(vec2 pos){
+	return sampleMaterial(ivec2(round(pos)));
+}
+
 float materialOcclusionFactor(uint material){
 	if(material == 0u){
 		return 0.89; // Opaque
 	}
 	if(material == 1u){
-		return 0.98; // Liquid
+		return 0.97; // Liquid
 	}
 	if(material == 2u){
-		return 1.0; // Emissive
+		return 0.91; // Emissive
 	}
 
 	return 1.0; // Air or gas

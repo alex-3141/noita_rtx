@@ -23,12 +23,12 @@ out vec4 outColor;
 
 vec3 castRays(vec2 uv){
 	const float rays = 256.0;
-	const uint steps = 24u;
+	const uint steps = 48u;
 
 	float noise = getBlueNoise(0, ivec2(uv * GLOW_BOUNDS));
 	vec3 color = vec3(0.0);
 
-	vec2 center_pos = vec2(uv * GLOW_BOUNDS);
+	vec2 center_pos = uv * (GLOW.size - vec2(1.0));
 
 	SDFSample startSample = sample_sdf(center_pos);
 
@@ -47,33 +47,32 @@ vec3 castRays(vec2 uv){
 		vec2 pos = ray_start_pos;
 
         // Ray starting off-screen
-        if(pos.x < 0.0 || pos.x > GLOW_BOUNDS.x || pos.y < 0.0 || pos.y > GLOW_BOUNDS.y){
-            break;
+        if(pos.x < 0.0 || pos.x >= GLOW.size.x || pos.y < 0.0 || pos.y >= GLOW.size.y){
+            continue;
         }
 
 		for(uint step_index = 0; step_index < steps; step_index++){
 			SDFSample sdfSample = sample_sdf(pos);
 			float dist = sdfSample.dist * 255.0;
+			float occlusionFactor = materialOcclusionFactor(sdfSample.material);
 
 			// Check if emissive
 			if(sdfSample.material == 2u){
-                vec3 emitter_color = sample_emitter_color(pos / GLOW_BOUNDS);
-				vec3 color_linear = srgb2rgb(emitter_color);
-
-				// Stop on surfaces
-				// TODO: Add in a screen edge factor to smooth over pop-in
-				color += color_linear * rayIntensity;
-				break;
+                vec3 emitter_color = srgb2rgb(sample_emitter_color(pos / GLOW_BOUNDS));
+				color += emitter_color * rayIntensity;
+				// Use the brightness of the emitter in the occlusion factor. This allows rays to more easily
+				// penetrate dark particels like smoke, and limits ray penetration for very bright materials
+				// like electricity in water
+				occlusionFactor -= (luma(emitter_color) * 0.4);
 			}
 
-			float occlusionFactor = materialOcclusionFactor(sdfSample.material);
 			rayIntensity *= pow(occlusionFactor, dist);
 
 			if(rayIntensity < 0.005){
 				break;
 			}
 
-			dt += max(0.707, dist);
+			dt += max(1.0, dist);
 
 			pos = ray_start_pos + dir * dt;
 
@@ -93,7 +92,7 @@ vec3 monteCarlo(vec2 uv){
 	vec3 color = castRays(uv);
 
     // Expand into 16 bit range
-    color *= 255.0;
+    color *= 32.0;
 
 	return color;
 }
@@ -113,14 +112,16 @@ void main()
         outColor.rgb = texelFetch(BUFFER, st, 0).rgb;
     }
 
-	if (within(HDR_VBUF_0)) {
-        ivec2 hdr_st = global_st_to_vbuffer_st(st, HDR_VBUF_0);
+	if (within(VBUF_HDR)) {
+        ivec2 hdr_st = global_st_to_vbuffer_st(st, VBUF_HDR);
 		ivec2 snap_st = ivec2(hdr_st.x & ~1, hdr_st.y);
-		vec2 uv = vbuffer_st_to_vbuffer_uv(snap_st, HDR_VBUF_0);
+		vec2 uv = vbuffer_st_to_vbuffer_uv(snap_st, VBUF_HDR);
 
 		vec3 glow = monteCarlo(uv);
 
 		uvec3 glow_bits = uvec3(glow * 255.0);
+		glow_bits = min(glow_bits, 0xFFFFu);
+
         if ((hdr_st.x & 1) == 0) {
 			// High bits
             glow = vec3((glow_bits >> 8) & 0xFFu) / 255.0;

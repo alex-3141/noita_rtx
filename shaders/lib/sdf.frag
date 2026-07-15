@@ -34,36 +34,6 @@ float distanceFieldPassHorizontal(ivec2 st){
 	return float(dist) / 255.0;
 }
 
-float emitterDistanceFieldPassHorizontal(ivec2 st){
-	int dist = 255;
-	float startMaterial = texelFetch(BUFFER, st, 0).r;
-
-	// Forwards walk
-	int max_x = min(321, st.x + 255);
-
-	for(int x = st.x + 1; x <= max_x; x++) {
-		float endMaterial = texelFetch(BUFFER, ivec2(x, st.y), 0).r;
-		if (startMaterial != endMaterial) {
-			dist = x - st.x;
-			break;
-		}
-	}
-
-	// Backwards walk
-	int min_x = max(214, st.x - dist);
-
-	for(int x = st.x - 1; x >= min_x; x--) {
-		float endMaterial = texelFetch(BUFFER, ivec2(x, st.y), 0).r;
-
-		if (startMaterial != endMaterial) {
-			dist = min(dist, st.x - x);
-			break;
-		}
-	}
-
-	return float(dist) / 255.0;
-}
-
 vec3 build_sdf(ivec2 buf_st, vec3 outColor){
     // SDF Pipeline step 1b
 
@@ -116,51 +86,6 @@ float distanceFieldPassVertical(ivec2 st){
 		}
 
 		int x_dist = int(sdfSample.dist * 255.0);
-		int dSqr = y_dist * y_dist + x_dist * x_dist;
-		minDistSqr = min(minDistSqr, dSqr);
-	}
-
-	float dist = sqrt(float(minDistSqr));
-
-	return dist / 255.0;
-}
-
-float emitterDistanceFieldPassVertical(ivec2 st){
-	vec3 centerSample = texelFetch(BUFFER, st, 0).rgb;
-	int centerDist = int(centerSample.g * 255.0);
-	int minDistSqr = centerDist * centerDist;
-
-	// Down walk
-	int max_y = min(59, st.y + centerDist);
-
-	for(int y = st.y + 1; y <= max_y; y++) {
-		vec3 sdfSample = texelFetch(BUFFER, ivec2(st.x, y), 0).rgb;
-		int y_dist = y - st.y;
-
-		if (centerSample.r != sdfSample.r) {
-			minDistSqr = min(minDistSqr, y_dist * y_dist);
-			break;
-		}
-
-		int x_dist = int(sdfSample.g * 255.0);
-		int dSqr = y_dist * y_dist + x_dist * x_dist;
-		// Early exit implicitally handled by max_y
-		minDistSqr = min(minDistSqr, dSqr);
-	}
-
-	// Up walk
-	int min_y = max(0, st.y - minDistSqr);
-
-	for(int y = st.y - 1; y >= min_y; y--) {
-		vec3 sdfSample = texelFetch(BUFFER, ivec2(st.x, y), 0).rgb;
-		int y_dist = y - st.y;
-
-		if (centerSample.r != sdfSample.r) {
-			minDistSqr = min(minDistSqr, y_dist * y_dist);
-			break;
-		}
-
-		int x_dist = int(sdfSample.g * 255.0);
 		int dSqr = y_dist * y_dist + x_dist * x_dist;
 		minDistSqr = min(minDistSqr, dSqr);
 	}

@@ -10,7 +10,7 @@ struct SDFSample {
 
 struct VBuffer {
 	vec2 pos;
-	vec2 bounds;
+	vec2 size;
 };
 
 int get_frame(){

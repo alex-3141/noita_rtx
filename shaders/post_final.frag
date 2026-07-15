@@ -81,11 +81,12 @@ varying vec2 tex_coord_fogofwar;
 // #define RTX_DEBUG_LIGHT_POSITIONS
 // #define RTX_DEBUG_LIGHT_POSITIONS_RULER
 // #define RTX_DEBUG_SDF
+// #define RTX_DEBUG_SDF_RINGS
 // #define RTX_DEBUG_EMITTER
 // #define RTX_DEBUG_EMITTER_FILL
 // #define RTX_DEBUG_MATERIAL
 // #define RTX_DEBUG_EMITTER_COLOR
-
+// #define RTX_DEBUG_GLOW_COLOR
 
 #define TONEMAP_FNC tonemapUncharted
 #undef DIGITS_SIZE
@@ -276,13 +277,13 @@ vec3 rtx_compute_light(in vec2 tex_coord, in vec2 tex_coord_glow){
 	// vec3 glow_light = sample_hdr_buffer(coord_glow_compensated);
 	vec3 glow_light = sample_hdr_buffer_gaussian_5x5(coord_glow_compensated);
 	// vec3 glow_light = sample_hdr_buffer_gaussian_3x3(coord_glow_compensated);
-	// vec3 glow_light = sample_hdr_buffer_uninterpolated(coord_glow_compensated + 1.0 / GLOW_SIZE);
+	// vec3 glow_light = sample_hdr_buffer_uninterpolated(coord_glow_compensated);
 
 	float ambient = rtx_exposure_ambient_dust.y;
 
 	// Light multipliers. These should balance all light sources to a common standard candle at 1.0 exposure
 	const float point_mul = 20.0;
-	const float glow_mul = 0.25;
+	const float glow_mul = 1.0;
 
 	point_light *= point_mul;
 	glow_light *= glow_mul;
@@ -325,8 +326,9 @@ vec3 rtx_tonemap(in vec3 composited){
 	return tonemapped;
 }
 
-vec3 rtx_debug(in vec2 uv, in vec3 color){
+vec3 rtx_debug(in vec2 uv, in vec2 glow_uv, in vec3 color){
 	uv = vec2(uv.x, 1.0 - uv.y);
+	vec2 coord_glow_compensated = glow_uv + camera_compensation() / GLOW_BOUNDS;
 
 	// ================ Glow buffer ================
 	#ifdef RTX_DEBUG_BUFFER
@@ -339,8 +341,24 @@ vec3 rtx_debug(in vec2 uv, in vec3 color){
 	color = texelFetch(tex_glow_unfiltered, ivec2((uv) * GLOW_SIZE), 0).rgb * 4.0;
 	#endif
 
-	// ================ SDF rings ================
+	// ================ Glow color ================
+	#ifdef RTX_DEBUG_GLOW_COLOR
+	color = sample_hdr_buffer_gaussian_5x5(coord_glow_compensated);
+	color = rgb2srgb(tonemap(color * 0.5));
+	#endif
+
+	// ============= Emitter color ==============
+	#ifdef RTX_DEBUG_EMITTER_COLOR
+	color = sample_emitter_color(coord_glow_compensated);
+	#endif
+
 	#ifdef RTX_DEBUG_SDF
+	// color = vec3(sample_sdf_texel(ivec2(round(uv * GLOW_BOUNDS))).dist);
+	color = vec3(sample_sdf(uv * GLOW_BOUNDS).dist);
+	#endif
+
+	// ================ SDF rings ================
+	#ifdef RTX_DEBUG_SDF_RINGS
 	SDFSample sdf = sample_sdf_texel(ivec2(uv * GLOW_BOUNDS));
 	uint dist = uint(sdf.dist * 255.0);
 	float ring = ((dist & 3u) == 0u) ? (1.0 - sdf.dist * 3.0) * 0.3 : 0.0;
@@ -350,7 +368,7 @@ vec3 rtx_debug(in vec2 uv, in vec3 color){
 
 	// ================ Emissive pixels ================
 	#if defined(RTX_DEBUG_EMITTER) || defined(RTX_DEBUG_EMITTER_FILL)
-	bool emitter_here = sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS)) == 2u;
+	bool emitter_here = sampleMaterial(tex_coord_glow_ * GLOW_BOUNDS) == 2u;
 
 	#ifdef RTX_DEBUG_EMITTER_FILL
 	if(emitter_here){
@@ -359,15 +377,15 @@ vec3 rtx_debug(in vec2 uv, in vec3 color){
 	#else
 
 	bool emitter_side = (
-		sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS) + ivec2( 1,  1)) == 2u ||
-		sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS) + ivec2(-1,  1)) == 2u ||
-		sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS) + ivec2( 1, -1)) == 2u ||
-		sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS) + ivec2(-1, -1)) == 2u
+		sampleMaterial(tex_coord_glow_ * GLOW_BOUNDS + vec2( 1.0,  1.0)) == 2u ||
+		sampleMaterial(tex_coord_glow_ * GLOW_BOUNDS + vec2(-1.0,  1.0)) == 2u ||
+		sampleMaterial(tex_coord_glow_ * GLOW_BOUNDS + vec2( 1.0, -1.0)) == 2u ||
+		sampleMaterial(tex_coord_glow_ * GLOW_BOUNDS + vec2(-1.0, -1.0)) == 2u
 	);
 	if(!emitter_here && emitter_side) {
-		color = vec3(0.0, 1.0, 1.0);
+		// color = vec3(0.0, 1.0, 1.0);
 	} else if(emitter_here) {
-		color = sample_emitter_color(tex_coord_glow_);
+		color = rgb2srgb(sample_emitter_color(tex_coord_glow_));
 	}
 	#endif
 	#endif
@@ -375,7 +393,7 @@ vec3 rtx_debug(in vec2 uv, in vec3 color){
 
 	// ================ Materials ================
 	#ifdef RTX_DEBUG_MATERIAL
-	uint mat = sampleMaterial(ivec2(tex_coord_glow_ * GLOW_BOUNDS));
+	uint mat = sampleMaterial(tex_coord_glow_ * (GLOW_BOUNDS + vec2(1.0)));
 	if(mat == 0u) {
 		color = vec3(0.7, 0.0, 0.0);
 	}
@@ -388,12 +406,6 @@ vec3 rtx_debug(in vec2 uv, in vec3 color){
 	if(mat == 3u) {
 		color = vec3(0.7, 0.0, 0.7);
 	}
-	#endif
-
-
-	// ============= Emitter color ==============
-	#ifdef RTX_DEBUG_EMITTER_COLOR
-	color = sample_emitter_color(uv);
 	#endif
 
 	// ============= Light positions ==============
@@ -969,7 +981,7 @@ void main()
 // various debug visualizations================================================================================
 
 // INSERT_AFTER // various debug visualizations================================================================================
-	color = rtx_debug(tex_coord_, color);
+	color = rtx_debug(tex_coord_, tex_coord_glow_, color);
 // END
 
 	//color.r += 1.0 - fog_of_war.r;

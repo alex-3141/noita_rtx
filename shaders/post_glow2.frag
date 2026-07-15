@@ -53,152 +53,62 @@ float downsampleEmitters(ivec2 st){
 
 uint getMaterial(ivec2 st) {
 	uint mat_here = getMaterialType(texelFetch(tex_glow_source, st, 0));
-
-	// Expand size of emitters to make them easier for rays to hit, and to reduce aliasing
-	// This needs to be adjusted in-step with the "Internal rays" part of raymarching
-	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2(-1, -1), 0)) == 2u) return 2u;
-	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2(-1,  0), 0)) == 2u) return 2u;
-	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2(-1,  1), 0)) == 2u) return 2u;
-	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2( 0, -1), 0)) == 2u) return 2u;
-	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2( 0,  0), 0)) == 2u) return 2u;
-	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2( 0,  1), 0)) == 2u) return 2u;
-	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2( 1, -1), 0)) == 2u) return 2u;
-	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2( 1,  0), 0)) == 2u) return 2u;
-	if(getMaterialType(texelFetch(tex_glow_source, st + ivec2( 1,  1), 0)) == 2u) return 2u;
-
 	return mat_here;
 }
 
-uvec3 sample_glow_source_st(ivec2 st){
-	vec4 s = texelFetch(tex_glow_source, st, 0);
+vec3 sample_glow_source_st(ivec2 st){
+	ivec2 st_clamped = clamp(st, ivec2(0), ivec2(GLOW_BOUNDS));
+	vec4 s = texelFetch(tex_glow_source, st_clamped, 0);
 
 	// Disregard non-emissive particles. This also filters out undesired colors
 	if(getMaterialType(s) != 2u) {
-		return uvec3(0u);
+		return vec3(0.0);
 	}
 
-	uvec4 color_u = uvec4(s * 255.0);
-
-    // Strip non-color bits
-    color_u = color_u & 0x7F;
-
-	// Crush from 6 bits to 4 bits
-	color_u = (color_u / 4) & 0xF;
-
-    return color_u.rgb;
+	return s.rgb * 4.0;
 }
 
-// A large area needs to be covered so that the top and bottom rows are able to
-// capture the color from the top 2 and bottom 2 rows of the source buffer. This also
-// reduces the chance of color lookups missing.
-// TODO: This only needs to be done for the edges, saving a lot of texture lookups
-uvec3 sample_glow_source_color_st_average_r2(ivec2 st){
-	const int radius = 2;
-	const int xLimits[3] = int[3](2, 2, 1);
+vec3 sample_glow_source_sum(ivec2 st){
+	vec3 sum = vec3(0.0);
 
-	uvec3 sum = uvec3(0u);
-	uint count = 0u;
+	// This would ideally be a direct 4x downscale, but the color buffers are slightly
+	// smaller than 1/4 the size of the glow source texture so we have to scan a 5x5 area
+	// to make sure nothing is missed
 
-	for(int y = -radius; y <= radius; y++){
-		int xLimit = xLimits[abs(y)];
-		for(int x = -xLimit; x <= xLimit; x++){
-			uvec3 s = sample_glow_source_st(st + ivec2(x, y));
-			if(s != uvec3(0u)){
-				sum += s;
-				count++;
-			}
-		}
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 0,  0))));
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 1,  0))));
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 2,  0))));
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 3,  0))));
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 0,  1))));
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 1,  1))));
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 2,  1))));
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 3,  1))));
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 0,  2))));
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 1,  2))));
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 2,  2))));
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 3,  2))));
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 0,  3))));
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 1,  3))));
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 2,  3))));
+	sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 3,  3))));
+
+	// Edge case, as source glow texture is 2 pixels taller than the 1/4 scaled
+	// buffer we're filling
+	if(st.y == 59){
+		sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 0,  4))));
+		sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 1,  4))));
+		sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 2,  4))));
+		sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 3,  4))));
+		sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 0,  5))));
+		sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 1,  5))));
+		sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 2,  5))));
+		sum = max(sum, srgb2rgb(sample_glow_source_st(st * 4 + ivec2( 3,  5))));
 	}
 
-	if(count == 0u){
-		return uvec3(0u);
-	}
-
-	return sum / count;
+	return rgb2srgb(sum);
+	// return rgb2srgb(sum / 16.0);
 }
 
-uvec3 sample_glow_source_color_st_average_r4(ivec2 st){
-	const int radius = 4;
-	const int xLimits[5] = int[5](4, 3, 3, 2, 0);
-
-	uvec3 sum = uvec3(0u);
-	uint count = 0u;
-
-	for(int y = -radius; y <= radius; y++){
-		int xLimit = xLimits[abs(y)];
-		for(int x = -xLimit; x <= xLimit; x++){
-			uvec3 s = sample_glow_source_st(st + ivec2(x, y));
-			if(s != uvec3(0u)){
-				sum += s;
-				count++;
-			}
-		}
-	}
-
-	if(count == 0u){
-		return uvec3(0u);
-	}
-
-	return sum / count;
-}
-
-uvec3 sample_glow_source_color_st_average_r6(ivec2 st){
-	const int radius = 6;
-	const int xLimits[7] = int[7](6, 6, 6, 5, 5, 4, 2);
-
-	uvec3 sum = uvec3(0u);
-	uint count = 0u;
-
-	for(int y = -radius; y <= radius; y++){
-		int xLimit = xLimits[abs(y)];
-		for(int x = -xLimit; x <= xLimit; x++){
-			uvec3 s = sample_glow_source_st(st + ivec2(x, y));
-			if(s != uvec3(0u)){
-				sum += s;
-				count++;
-			}
-		}
-	}
-
-	if(count == 0u){
-		return uvec3(0u);
-	}
-
-	return sum / count;
-}
-
-
-uvec3 sample_glow_source_color_st_average_r8(ivec2 st){
-	const int radius = 8;
-	const int xLimits[9] = int[9](8, 7, 7, 7, 6, 6, 5, 3, 0);
-
-	uvec3 sum = uvec3(0u);
-	uint count = 0u;
-
-	for(int y = -radius; y <= radius; y++){
-		int xLimit = xLimits[abs(y)];
-		for(int x = -xLimit; x <= xLimit; x++){
-			uvec3 s = sample_glow_source_st(st + ivec2(x, y));
-			if(s != uvec3(0u)){
-				sum += s;
-				count++;
-			}
-		}
-	}
-
-	if(count == 0u){
-		return uvec3(0u);
-	}
-
-	return sum / count;
-}
-
-uvec3 sample_glow_source_st_average(ivec2 st){
-	// return sample_glow_source_color_st_average_r2(st);
-	// return sample_glow_source_color_st_average_r4(st);
-	// return sample_glow_source_color_st_average_r6(st);
-	return sample_glow_source_color_st_average_r8(st);
-}
 
 // TODO: Use Lygia imported version
 vec3 smartDeNoise(vec2 uv, vec2 pixel, float sigma, float kSigma, float threshold) {
@@ -236,34 +146,6 @@ vec3 smartDeNoise(vec2 uv, vec2 pixel, float sigma, float kSigma, float threshol
     return aBuff/zBuff;
 }
 
-// Color data is only 4 bits per channel, so we store 2 colors per pixel
-vec3 store_color(ivec2 vbuf_st){
-	// Here we are doing a 2x downscale, while also cutting off the top and bottom rows.
-	// The top and bottom rows are compressed into the edges.
-	ivec2 scaled_st = vbuf_st * 2;
-	scaled_st += ivec2(0, 2); // 2 to account for the * 2 in prev step
-
-    ivec2 color_0_st = scaled_st;
-    ivec2 color_1_st = scaled_st + ivec2(0, 120);
-
-
-	uvec3 color_0 = sample_glow_source_st_average(color_0_st) & 0xF;
-	uvec3 color_1 = sample_glow_source_st_average(color_1_st) & 0xF;
-
-	// Test pattern should appear magenta
-	// color_0 = uvec3(15u, 15u, 0u);
-	// color_1 = uvec3(0u, 15u, 15u);
-
-    uvec3 pack = uvec3(
-        color_0.r << 4 | color_0.g,
-        color_0.b << 4 | color_1.r,
-        color_1.g << 4 | color_1.b
-    );
-
-    return vec3(pack) / 255.0;
-}
-
-
 vec3 downsample_particle_glow(vec2 uv){
 	vec2 particle_uv = vec2(uv.x, 1.0 - uv.y);
 	vec3 particle_glow = vec3(0.0);
@@ -277,6 +159,28 @@ vec3 downsample_particle_glow(vec2 uv){
 	return particle_glow / 4.0;
 }
 
+vec3 sample_color_0(ivec2 st){
+	ivec2 clamped_st = clamp(st, ivec2(0), ivec2(107, 59));
+	return texelFetch(BUFFER, clamped_st, 0).rgb;
+}
+
+vec3 expand_glow_source_color(vec2 uv){
+	ivec2 st = ivec2(round(uv * (VBUF_COLOR_1.size - vec2(1.0))));
+	vec3 s = vec3(0.0);
+
+	s = max(s, srgb2rgb(sample_color_0(st + ivec2(-1, -1))));
+	s = max(s, srgb2rgb(sample_color_0(st + ivec2( 0, -1))));
+	s = max(s, srgb2rgb(sample_color_0(st + ivec2( 1, -1))));
+	s = max(s, srgb2rgb(sample_color_0(st + ivec2(-1,  0))));
+	s = max(s, srgb2rgb(sample_color_0(st + ivec2( 0,  0))));
+	s = max(s, srgb2rgb(sample_color_0(st + ivec2( 1,  0))));
+	s = max(s, srgb2rgb(sample_color_0(st + ivec2(-1,  1))));
+	s = max(s, srgb2rgb(sample_color_0(st + ivec2( 0,  1))));
+	s = max(s, srgb2rgb(sample_color_0(st + ivec2( 1,  1))));
+
+	return rgb2srgb(s);
+}
+
 // TODO: Optimisation
 // Ensure each vbuffer that needs to do heavy texture lookups start at an even offset to ensure they land in the same quad group.
 void main(){
@@ -287,19 +191,40 @@ void main(){
 	}
 
     if (within(VBUF_COLOR_0)) {
-        ivec2 color_st = global_st_to_vbuffer_st(st, VBUF_COLOR_0);
-		// We spread source colors over a larger area to ensure they are captured in the downsampled buffers,
-		// and to prevent rays missing colors when they sample.
-        outColor.rgb = store_color(color_st);
-		// outColor.rgb = vec3(1.0, 0.0, 0.0);
-		// outColor.rgb = vec3(vec2(color_st) / VBUF_COLOR_0.bounds, 0.0);
+		// ivec2 st = global_st_to_vbuffer_st(st, VBUF_COLOR_0);
+		// vec2 uv = global_st_to_vbuffer_uv(st, VBUF_COLOR_0);
+
+		// vec2 vbuf_st = vec2(st) - VBUF_COLOR_0.pos;
+		// vec2 uv = vec2(st) / (VBUF_COLOR_0.size - vec2(1.0));
+
+		outColor.rgb = sample_glow_source_sum(st);
     }
 
     if (within(VBUF_COLOR_1)) {
-		// outColor.rgb = vec3(0.0, 1.0, 0.0);
-		// return;
-        ivec2 color_st = global_st_to_vbuffer_st(st, VBUF_COLOR_1);
-        outColor.rgb = sample_buffer_texel(VBUF_COLOR_0, color_st);
+        // ivec2 st = global_st_to_vbuffer_st(st, VBUF_COLOR_1);
+        // outColor.rgb = sample_buffer_texel(VBUF_COLOR_0, st);
+		vec2 uv = global_st_to_vbuffer_uv(st, VBUF_COLOR_1);
+        outColor.rgb = expand_glow_source_color(uv);
+    }
+
+    if (within(VBUF_PARTICLE_0)) {
+		vec2 uv = global_st_to_vbuffer_uv(st, VBUF_PARTICLE_0);
+		outColor.rgb = vec3(uv, 0.0);
+    }
+
+    if (within(VBUF_PARTICLE_1)) {
+		vec2 uv = global_st_to_vbuffer_uv(st, VBUF_PARTICLE_1);
+		outColor.rgb = vec3(uv, 0.0);
+    }
+
+    if (within(VBUF_NORMAL_0)) {
+		vec2 uv = global_st_to_vbuffer_uv(st, VBUF_NORMAL_0);
+		outColor.rgb = vec3(uv, 0.0);
+    }
+
+    if (within(VBUF_NORMAL_1)) {
+		vec2 uv = global_st_to_vbuffer_uv(st, VBUF_NORMAL_1);
+		outColor.rgb = vec3(uv, 0.0);
     }
 
 	if (within(SDF)) {
@@ -324,8 +249,8 @@ void main(){
 		// Pipeline step 2a
 		//   - SDF Second pass (vertical)
 
-		float distUpper = distanceFieldPassVertical(sdf_st + ivec2(0, -1));
-		float distLower = distanceFieldPassVertical(sdf_st + ivec2(0, 120));
+		float distUpper = distanceFieldPassVertical(sdf_st + ivec2(0, 0));
+		float distLower = distanceFieldPassVertical(sdf_st + ivec2(0, 121));
 
 		outColor.rgb = vec3(
 			distUpper,
@@ -334,34 +259,26 @@ void main(){
 		);
 	}
 
-	if (within(HDR_VBUF_0)) {
-        ivec2 hdr_st = global_st_to_vbuffer_st(st, HDR_VBUF_0);
+	if (within(VBUF_HDR)) {
+        // outColor.rgb = texelFetch(BUFFER, st, 0).rgb;
+		// return;
+
+        ivec2 hdr_st = global_st_to_vbuffer_st(st, VBUF_HDR);
 		ivec2 snap_st = ivec2(hdr_st.x & ~1, hdr_st.y);
-		vec2 uv = vbuffer_st_to_vbuffer_uv(snap_st, HDR_VBUF_0);
-		vec3 glow = sample_hdr_buffer(uv);
-		uint material = sample_sdf(uv * GLOW_BOUNDS).material;
+		vec2 uv = vbuffer_st_to_vbuffer_uv(snap_st, VBUF_HDR);
 
 		// === Denoising ===
 
-		// Nearly all of the visible noise is only present in air
-		// Denoise only in air, so that sharp shadows can be preserved on terrain
-		// if(material == 3u) {
-			// Good settings for a static image
-			// float sigma = 1.3;
-			// float kSigma = 2.7;
-			// float threshold = 0.17;
-
-			float sigma = 1.5;
-			float kSigma = 3.0;
-			float threshold = 2.0;
-			vec2 pixel = vec2(1.0) / vec2(107.0, 60.0);
-			glow = smartDeNoise(uv, pixel, sigma, kSigma, threshold);
-		// }
+		float sigma = 1.5;
+		float kSigma = 3.0;
+		float threshold = 2.0;
+		vec2 pixel = vec2(1.0) / vec2(107.0, 60.0);
+		vec3 glow = smartDeNoise(uv, pixel, sigma, kSigma, threshold);
 
 		// Add vanilla particle glow
 		// TODO: This is out of sync with the monte carlo glow. There should be enough free
 		// buffer space to delay this.
-		glow += downsample_particle_glow(uv) * 1023.0;
+		glow += downsample_particle_glow(uv) * 255.0;
 
 		uvec3 glow_bits = uvec3(glow * 255.0);
 		glow_bits = min(glow_bits, 0xFFFFu);
@@ -378,7 +295,7 @@ void main(){
 
 		// Skip denoising
 		// if((get_frame() & 64) == 64){
-			// outClor.rgb = texelFetch(BUFFER, st, 0).rgb;
+		// outColor.rgb = texelFetch(BUFFER, st + ivec2(0, 0), 0).rgb;
 		// }
     }
 }
